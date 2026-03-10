@@ -2,18 +2,21 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"zfsnas/internal/audit"
 	"zfsnas/internal/config"
+	"zfsnas/system"
 )
 
 // HandleGetSettings returns current application settings.
 func HandleGetSettings(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{
-			"port":                appCfg.Port,
-			"storage_unit":        appCfg.StorageUnit,
-			"live_update_enabled": appCfg.LiveUpdateEnabled,
+			"port":                 appCfg.Port,
+			"storage_unit":         appCfg.StorageUnit,
+			"live_update_enabled":  appCfg.LiveUpdateEnabled,
+			"max_smbd_processes":   appCfg.MaxSmbdProcesses,
 		})
 	}
 }
@@ -25,6 +28,7 @@ func HandleUpdateSettings(appCfg *config.AppConfig) http.HandlerFunc {
 			Port              *int    `json:"port"`
 			StorageUnit       *string `json:"storage_unit"`
 			LiveUpdateEnabled *bool   `json:"live_update_enabled"`
+			MaxSmbdProcesses  *int    `json:"max_smbd_processes"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			jsonErr(w, http.StatusBadRequest, "invalid request body")
@@ -52,11 +56,27 @@ func HandleUpdateSettings(appCfg *config.AppConfig) http.HandlerFunc {
 			appCfg.LiveUpdateEnabled = *req.LiveUpdateEnabled
 			changed = true
 		}
+		if req.MaxSmbdProcesses != nil {
+			if *req.MaxSmbdProcesses < 1 || *req.MaxSmbdProcesses > 10000 {
+				jsonErr(w, http.StatusBadRequest, "max_smbd_processes must be between 1 and 10000")
+				return
+			}
+			appCfg.MaxSmbdProcesses = *req.MaxSmbdProcesses
+			changed = true
+		}
 
 		if changed {
 			if err := config.SaveAppConfig(appCfg); err != nil {
 				jsonErr(w, http.StatusInternalServerError, "failed to save settings")
 				return
+			}
+			// Apply Samba global parameters and reload if Samba is installed.
+			if req.MaxSmbdProcesses != nil && system.IsSambaInstalled() {
+				if err := system.ApplySmbGlobal(appCfg.MaxSmbdProcesses); err != nil {
+					log.Printf("settings: ApplySmbGlobal: %v", err)
+				} else if err := system.ReloadSamba(); err != nil {
+					log.Printf("settings: ReloadSamba: %v", err)
+				}
 			}
 			sess := MustSession(r)
 			audit.Log(audit.Entry{

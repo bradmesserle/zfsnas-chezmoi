@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	smbConfPath    = "/etc/samba/smb.conf"
-	smbBeginMarker = "# ===== ZFS NAS MANAGED SHARES BEGIN ====="
-	smbEndMarker   = "# ===== ZFS NAS MANAGED SHARES END ====="
+	smbConfPath          = "/etc/samba/smb.conf"
+	smbBeginMarker       = "# ===== ZFS NAS MANAGED SHARES BEGIN ====="
+	smbEndMarker         = "# ===== ZFS NAS MANAGED SHARES END ====="
+	smbGlobalBeginMarker = "# ===== ZFS NAS MANAGED GLOBAL BEGIN ====="
+	smbGlobalEndMarker   = "# ===== ZFS NAS MANAGED GLOBAL END ====="
 )
 
 // SMBShare represents a Samba file share.
@@ -99,6 +101,42 @@ func applySMBConf(shares []SMBShare) error {
 	if begin >= 0 && end > begin {
 		newConf = conf[:begin] + managed + conf[end+len(smbEndMarker):]
 		// Trim any double newlines left by removal.
+		newConf = strings.ReplaceAll(newConf, "\n\n\n", "\n\n")
+	} else {
+		newConf = strings.TrimRight(conf, "\n") + "\n\n" + managed
+	}
+
+	// If the managed global section is not yet in the file, seed it now with
+	// the default value (100) so the parameter is always present from the
+	// moment the first share is configured.
+	if !strings.Contains(newConf, smbGlobalBeginMarker) {
+		global := fmt.Sprintf("%s\n[global]\n   max smbd processes = 100\n%s\n",
+			smbGlobalBeginMarker, smbGlobalEndMarker)
+		newConf = strings.TrimRight(newConf, "\n") + "\n\n" + global
+	}
+
+	return writeFileSudo(smbConfPath, newConf)
+}
+
+// ApplySmbGlobal writes a managed [global] block into smb.conf that sets
+// performance-related global parameters. Samba merges multiple [global]
+// sections, with later values taking precedence, so this block is safe to
+// append alongside an existing [global] section written by the distro.
+func ApplySmbGlobal(maxSmbdProcesses int) error {
+	managed := fmt.Sprintf("%s\n[global]\n   max smbd processes = %d\n%s\n",
+		smbGlobalBeginMarker, maxSmbdProcesses, smbGlobalEndMarker)
+
+	existing, err := os.ReadFile(smbConfPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read smb.conf: %w", err)
+	}
+	conf := string(existing)
+
+	begin := strings.Index(conf, smbGlobalBeginMarker)
+	end   := strings.Index(conf, smbGlobalEndMarker)
+	var newConf string
+	if begin >= 0 && end > begin {
+		newConf = conf[:begin] + managed + conf[end+len(smbGlobalEndMarker):]
 		newConf = strings.ReplaceAll(newConf, "\n\n\n", "\n\n")
 	} else {
 		newConf = strings.TrimRight(conf, "\n") + "\n\n" + managed

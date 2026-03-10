@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -94,6 +95,9 @@ func ListDisks(configDir string) ([]DiskInfo, error) {
 	systemMounts := gatherSystemMounts(blkInfo.Blockdevices)
 	debugLog("system-mounted disks: %v", systemMounts)
 
+	zfsDisks := zfsPoolDiskNames()
+	debugLog("zfs pool disks: %v", zfsDisks)
+
 	disks := []DiskInfo{} // non-nil empty slice so JSON encodes as [] not null
 	for _, dev := range blkInfo.Blockdevices {
 		if !strings.EqualFold(dev.Type, "disk") {
@@ -113,7 +117,7 @@ func ListDisks(configDir string) ([]DiskInfo, error) {
 			Vendor:    vendor,
 			Model:     model,
 			Transport: dev.Tran,
-			InUse:     systemMounts[dev.Name],
+			InUse:     systemMounts[dev.Name] || zfsDisks[dev.Name],
 		}
 		info.Rotational = isRotational(dev.Rota)
 		info.DiskType = diskType(dev.Tran, info.Rotational)
@@ -388,6 +392,46 @@ func saveSmartCache(configDir string, cache map[string]DiskInfo) error {
 }
 
 // ---- Helpers ----
+
+// zfsPoolDiskNames returns the set of kernel disk base names (e.g. "sda")
+// that are members of the currently imported ZFS pool.
+// It resolves symlinks such as /dev/disk/by-partuuid/... to real device paths,
+// then strips any partition suffix to get the parent disk name.
+func zfsPoolDiskNames() map[string]bool {
+	result := make(map[string]bool)
+	pool, err := GetPool()
+	if err != nil || pool == nil {
+		return result
+	}
+	for _, member := range pool.Members {
+		// Resolve symlinks (e.g. /dev/disk/by-partuuid/xxx → /dev/sda1).
+		real, err := filepath.EvalSymlinks(member)
+		if err != nil {
+			real = member
+		}
+		base := filepath.Base(real)
+		// Strip partition suffix so sda1 → sda, nvme0n1p1 → nvme0n1.
+		result[diskBaseName(base)] = true
+	}
+	return result
+}
+
+var (
+	reNVMePart  = regexp.MustCompile(`^(nvme\d+n\d+)p\d+$`)
+	reSATAPart  = regexp.MustCompile(`^([a-z]+)\d+$`)
+)
+
+// diskBaseName strips a partition suffix from a kernel device name.
+// Examples: sda1 → sda, nvme0n1p2 → nvme0n1, sdb → sdb.
+func diskBaseName(name string) string {
+	if m := reNVMePart.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	if m := reSATAPart.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	return name
+}
 
 func gatherSystemMounts(devs []lsblkDev) map[string]bool {
 	result := make(map[string]bool)

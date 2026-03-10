@@ -284,6 +284,7 @@ input::placeholder { color: var(--text-3); }
   flex-direction: column;
   padding: 20px 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-header {

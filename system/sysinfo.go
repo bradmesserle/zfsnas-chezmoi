@@ -102,9 +102,13 @@ func poolMemberBaseNames() []string {
 	}
 	names := make([]string, 0, len(pool.Members))
 	for _, m := range pool.Members {
-		base := filepath.Base(m)
-		// Strip partition suffix: sda1 → sda (ZFS uses whole disks, but just in case)
-		names = append(names, base)
+		// Resolve symlinks (e.g. /dev/disk/by-partuuid/xxx → /dev/sda1)
+		// so we get the real kernel device name for /proc/diskstats lookups.
+		real, err := filepath.EvalSymlinks(m)
+		if err != nil {
+			real = m
+		}
+		names = append(names, diskBaseName(filepath.Base(real)))
 	}
 	return names
 }

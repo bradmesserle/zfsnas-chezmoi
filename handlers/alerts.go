@@ -56,13 +56,26 @@ func HandleTestAlert(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"message": "test email sent"})
 }
 
+const alertDedup = 24 * time.Hour
+
+// isSmartUnsupported returns true when a disk has no genuine SMART failure —
+// either SMART is not supported by the hardware, smartctl is unavailable,
+// or the SMART cache has not been populated yet (zero-value SmartMsg).
+func isSmartUnsupported(msg string) bool {
+	switch msg {
+	case "", "Not supported", "smartctl unavailable", "parse error":
+		return true
+	}
+	return false
+}
+
 // StartHealthPoller launches a background goroutine that checks pool health
 // and disk wearout every 5 minutes and fires alert emails on threshold breaches.
 func StartHealthPoller(configDir string) {
 	go func() {
 		var lastPoolHealth string
-		lastWearoutAlerted := map[string]bool{}
-		lastSmartAlerted := map[string]bool{}
+		lastWearoutAlerted := map[string]time.Time{}
+		lastSmartAlerted := map[string]time.Time{}
 
 		// Brief delay so the server is fully up before the first check.
 		time.Sleep(30 * time.Second)
@@ -78,8 +91,8 @@ func StartHealthPoller(configDir string) {
 
 func runHealthCheck(
 	lastPoolHealth *string,
-	lastWearoutAlerted map[string]bool,
-	lastSmartAlerted map[string]bool,
+	lastWearoutAlerted map[string]time.Time,
+	lastSmartAlerted map[string]time.Time,
 	configDir string,
 ) {
 	cfg, err := alerts.Load()
@@ -113,40 +126,46 @@ func runHealthCheck(
 		if err != nil {
 			return
 		}
+		now := time.Now()
 		for _, d := range disks {
-			// SMART error
-			if cfg.Events.SmartError && !d.SmartOK && !lastSmartAlerted[d.Name] {
-				lastSmartAlerted[d.Name] = true
-				name, msg := d.Name, d.SmartMsg
-				go func() {
-					if err := alerts.Send(
-						"SMART error on "+name,
-						"SMART Error Detected",
-						fmt.Sprintf("Disk %s reports a SMART error: %s", name, msg),
-					); err != nil {
-						log.Printf("alerts: send failed: %v", err)
-					}
-				}()
-			} else if d.SmartOK {
-				delete(lastSmartAlerted, d.Name)
-			}
-
-			// Wearout threshold
-			if cfg.Events.WearoutExceeded && cfg.Events.WearoutThresholdPct > 0 && d.WearoutPct != nil {
-				thr := cfg.Events.WearoutThresholdPct
-				if *d.WearoutPct >= thr && !lastWearoutAlerted[d.Name] {
-					lastWearoutAlerted[d.Name] = true
-					name, pct := d.Name, *d.WearoutPct
+			// SMART error — skip if SMART is unsupported or cache not ready,
+			// and suppress repeated alerts for the same disk within 24 hours.
+			if cfg.Events.SmartError && !d.SmartOK && !isSmartUnsupported(d.SmartMsg) {
+				if last, seen := lastSmartAlerted[d.Name]; !seen || now.Sub(last) >= alertDedup {
+					lastSmartAlerted[d.Name] = now
+					name, msg := d.Name, d.SmartMsg
 					go func() {
 						if err := alerts.Send(
-							fmt.Sprintf("Disk wearout: %s at %d%%", name, pct),
-							"Disk Wearout Threshold Exceeded",
-							fmt.Sprintf("Disk %s has reached %d%% wearout (threshold: %d%%)", name, pct, thr),
+							"SMART error on "+name,
+							"SMART Error Detected",
+							fmt.Sprintf("Disk %s reports a SMART error: %s", name, msg),
 						); err != nil {
 							log.Printf("alerts: send failed: %v", err)
 						}
 					}()
-				} else if *d.WearoutPct < thr {
+				}
+			} else if d.SmartOK {
+				delete(lastSmartAlerted, d.Name)
+			}
+
+			// Wearout threshold — suppress repeated alerts within 24 hours.
+			if cfg.Events.WearoutExceeded && cfg.Events.WearoutThresholdPct > 0 && d.WearoutPct != nil {
+				thr := cfg.Events.WearoutThresholdPct
+				if *d.WearoutPct >= thr {
+					if last, seen := lastWearoutAlerted[d.Name]; !seen || now.Sub(last) >= alertDedup {
+						lastWearoutAlerted[d.Name] = now
+						name, pct := d.Name, *d.WearoutPct
+						go func() {
+							if err := alerts.Send(
+								fmt.Sprintf("Disk wearout: %s at %d%%", name, pct),
+								"Disk Wearout Threshold Exceeded",
+								fmt.Sprintf("Disk %s has reached %d%% wearout (threshold: %d%%)", name, pct, thr),
+							); err != nil {
+								log.Printf("alerts: send failed: %v", err)
+							}
+						}()
+					}
+				} else {
 					delete(lastWearoutAlerted, d.Name)
 				}
 			}

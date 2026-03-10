@@ -17,10 +17,11 @@ const (
 // AppConfig holds top-level application settings.
 type AppConfig struct {
 	Port              int       `json:"port"`
-	StorageUnit       string    `json:"storage_unit,omitempty"`       // "gb" (1000-based) or "gib" (1024-based)
+	StorageUnit       string    `json:"storage_unit,omitempty"`        // "gb" (1000-based) or "gib" (1024-based)
 	SMARTLastRefresh  time.Time `json:"smart_last_refresh,omitempty"`
-	WeeklyScrub       bool      `json:"weekly_scrub,omitempty"`       // auto-scrub every Sunday at 02:00
+	WeeklyScrub       bool      `json:"weekly_scrub,omitempty"`        // auto-scrub every Sunday at 02:00
 	LiveUpdateEnabled bool      `json:"live_update_enabled,omitempty"` // enable in-place binary self-update
+	MaxSmbdProcesses  int       `json:"max_smbd_processes,omitempty"`  // Samba max smbd processes (0 = use default 100)
 }
 
 // User represents a portal or SMB-only user.
@@ -83,6 +84,9 @@ func LoadAppConfig() (*AppConfig, error) {
 	}
 	if cfg.StorageUnit == "" {
 		cfg.StorageUnit = "gb"
+	}
+	if cfg.MaxSmbdProcesses == 0 {
+		cfg.MaxSmbdProcesses = 100
 	}
 	return cfg, nil
 }

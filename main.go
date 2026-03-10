@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -33,6 +34,14 @@ func main() {
 	debugMode := flag.Bool("debug", false, "Enable verbose debug logging (lsblk details, etc.)")
 	configDir := flag.String("config", "./config", "Path to config directory")
 	flag.Parse()
+
+	// ===== Sudo check =====
+	if err := exec.Command("sudo", "-n", "true").Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "ERROR: zfsnas requires passwordless sudo access.")
+		fmt.Fprintln(os.Stderr, "       Please add the following line to /etc/sudoers (via visudo):")
+		fmt.Fprintln(os.Stderr, "         <your-user> ALL=(ALL) NOPASSWD: ALL")
+		os.Exit(1)
+	}
 
 	system.DebugMode = *debugMode
 	if *debugMode {
