@@ -97,9 +97,9 @@ sudo ./zfsnas
 
 ```bash
 # Download the latest release for Linux amd64
-curl -Lo zfsnas https://github.com/your-org/zfsnas-chezmoi/releases/latest/download/zfsnas-linux-amd64
-chmod +x zfsnas
-sudo ./zfsnas
+curl -Lo zfsnas https://github.com/macgaver/zfsnas-chezmoi/releases/latest/download/zfsnas-chezmoi
+chmod +x zfsnas-chezmoi.ca
+./zfsnas
 ```
 
 ### First-run setup
