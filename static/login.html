@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZFS NAS — Sign In</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+
+      <div class="auth-logo">
+        <img src="/static/logo.svg" alt="ZFS NAS" style="height:100px;width:320px;object-fit:contain;">
+      </div>
+
+      <h1>Sign In</h1>
+      <p class="auth-subtitle">NAS Management Portal</p>
+
+      <div id="alert" class="alert alert-error hidden"></div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username"
+                 placeholder="Your username" autocomplete="username" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password"
+                 placeholder="Your password" autocomplete="current-password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+          Sign In
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    // Auto-redirect if already logged in.
+    (async () => {
+      try {
+        const resp = await fetch('/api/auth/me');
+        if (resp.ok) window.location.href = '/';
+      } catch {}
+    })();
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn    = document.getElementById('submit-btn');
+      const alert  = document.getElementById('alert');
+      alert.classList.add('hidden');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Signing in…';
+
+      const form = e.target;
+      try {
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: form.username.value.trim(),
+            password: form.password.value,
+          }),
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          showAlert(data.error || 'Sign in failed.');
+          btn.disabled = false;
+          btn.innerHTML = 'Sign In';
+          return;
+        }
+
+        btn.innerHTML = '✓ Success — loading portal…';
+        window.location.href = '/';
+
+      } catch (err) {
+        showAlert('Network error. Is the server reachable?');
+        btn.disabled = false;
+        btn.innerHTML = 'Sign In';
+      }
+    }
+
+    function showAlert(msg) {
+      const el = document.getElementById('alert');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

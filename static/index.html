@@ -1,0 +1,3698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZFS NAS Portal</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    /* Pool bar tooltip */
+    .pool-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0d0d0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 50;
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .pool-bar-segment:hover .pool-tooltip { display: block; }
+
+    /* User rows */
+    .user-row-name { display: flex; align-items: center; gap: 10px; }
+
+    /* Side panel */
+    .side-panel {
+      position: fixed; top: 0; right: 0;
+      width: 360px; height: 100vh;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+      z-index: 80;
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    }
+    .side-panel.open { transform: translateX(0); }
+    .side-panel-header {
+      padding: 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .side-panel-body { padding: 24px; overflow-y: auto; flex: 1; }
+    .stat-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { color: var(--text-2); }
+    .stat-value { font-weight: 600; font-family: "SF Mono", monospace; }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--text-3); }
+    .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; margin-top: 6px; }
+
+    /* Prereqs status list */
+    .prereq-status-ok   { color: var(--accent-3); font-size: 16px; }
+    .prereq-status-miss { color: var(--accent-danger); font-size: 16px; }
+
+    /* Alert event rows */
+    .al-event-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 0; border-bottom: 1px solid var(--border);
+      font-size: 14px; cursor: pointer; user-select: none;
+    }
+    .al-event-row:last-child { border-bottom: none; }
+    .al-event-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
+    .al-event-row input[type=number]   { width: 58px; display: inline; padding: 2px 6px; margin: 0 4px; }
+    .al-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-2); margin: 20px 0 10px;
+    }
+
+    /* Disk I/O charts bar */
+    #io-bar {
+      flex-shrink: 0;
+      display: none; /* shown only when a pool is present */
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px 8px;
+      gap: 12px;
+      flex-direction: row;
+      align-items: flex-end;
+    }
+    #io-bar.io-bar-visible { display: flex; }
+    .io-chart-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .io-chart-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+    .io-chart-wrap canvas { display: block; width: 100% !important; height: 70px !important; }
+
+    /* Service installed banner */
+    .banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-radius: var(--radius-sm);
+      font-size: 13px; margin-bottom: 12px;
+    }
+    .banner-warn {
+      background: rgba(255,214,10,0.1);
+      border: 1px solid rgba(255,214,10,0.25);
+      color: var(--accent-warn);
+    }
+    .banner-ok {
+      background: rgba(50,215,75,0.1);
+      border: 1px solid rgba(50,215,75,0.25);
+      color: var(--accent-3);
+    }
+    .banner-danger {
+      background: rgba(255,69,58,0.1);
+      border: 1px solid rgba(255,69,58,0.25);
+      color: var(--accent-danger);
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout" id="app">
+
+  <!-- ===== SIDEBAR ===== -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <img src="/static/logo.svg" alt="ZFS NAS" style="height:64px;width:204px;object-fit:contain;">
+      <div style="margin-top:6px;font-size:12px;color:var(--text-3);" id="current-user-info"></div>
+    </div>
+
+    <div class="sidebar-section">Storage</div>
+    <button class="nav-item" onclick="showPage('disks')"     id="nav-disks">    <span class="nav-icon">💿</span> Physical Disks</button>
+    <button class="nav-item" onclick="showPage('pool')"      id="nav-pool">     <span class="nav-icon">🗄</span> ZFS Pool</button>
+    <button class="nav-item" onclick="showPage('datasets')"  id="nav-datasets"> <span class="nav-icon">📁</span> Datasets</button>
+    <button class="nav-item" onclick="showPage('snapshots')" id="nav-snapshots"><span class="nav-icon">📸</span> Snapshots</button>
+
+    <div class="sidebar-section">Sharing</div>
+    <button class="nav-item" onclick="showPage('shares')"    id="nav-shares">   <span class="nav-icon">🔗</span> SMB Shares</button>
+    <button class="nav-item" onclick="showPage('nfs')"       id="nav-nfs">      <span class="nav-icon">🌐</span> NFS Shares</button>
+
+    <div class="sidebar-section">System</div>
+    <button class="nav-item" onclick="showPage('users')"     id="nav-users">    <span class="nav-icon">👤</span> Users</button>
+    <button class="nav-item" onclick="showPage('prereqs')"   id="nav-prereqs">  <span class="nav-icon">🔧</span> Prerequisites</button>
+    <button class="nav-item" onclick="showPage('updates')"   id="nav-updates">  <span class="nav-icon">⬆</span> OS Updates</button>
+    <button class="nav-item" onclick="toggleTermPanel()"     id="nav-terminal"> <span class="nav-icon">⌨</span> Terminal</button>
+    <button class="nav-item" onclick="showPage('settings')"  id="nav-settings"> <span class="nav-icon">⚙</span> Settings</button>
+
+    <div class="sidebar-section">Logs</div>
+    <button class="nav-item" onclick="showPage('activity')"  id="nav-activity"> <span class="nav-icon">📋</span> Activity Log</button>
+
+    <div style="flex:1"></div>
+    <div style="padding:16px 20px;border-top:1px solid var(--border);">
+      <button class="btn btn-ghost btn-sm w-full" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <div class="main-content">
+
+    <!-- Top bar: pool capacity -->
+    <div class="topbar">
+      <div class="topbar-inner">
+        <span class="topbar-title">Pool Capacity</span>
+        <span id="pool-summary" class="text-sm text-2"></span>
+      </div>
+      <div class="pool-bar-container" id="pool-bar">
+        <div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--text-3);font-size:13px;">
+          No pool configured
+        </div>
+      </div>
+      <div class="pool-bar-legend" id="pool-legend"></div>
+    </div>
+
+    <!-- Disk I/O charts (shown only when a pool exists) -->
+    <div id="io-bar">
+      <div class="io-chart-wrap">
+        <div class="io-chart-label">Read KB/s</div>
+        <canvas id="io-chart-read"></canvas>
+      </div>
+      <div class="io-chart-wrap">
+        <div class="io-chart-label">Write KB/s</div>
+        <canvas id="io-chart-write"></canvas>
+      </div>
+      <div class="io-chart-wrap">
+        <div class="io-chart-label">Busy %</div>
+        <canvas id="io-chart-busy"></canvas>
+      </div>
+    </div>
+
+    <!-- Scrollable pages area -->
+    <div class="pages-container">
+
+      <!-- DASHBOARD -->
+      <div class="page" id="page-dashboard">
+        <div class="page-header"><h2>Dashboard</h2></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;">
+          <div class="card-sm">
+            <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Pool Status</div>
+            <div class="text-2" id="dash-pool">—</div>
+          </div>
+          <div class="card-sm">
+            <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Datasets</div>
+            <div class="text-2" id="dash-datasets">—</div>
+          </div>
+          <div class="card-sm">
+            <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">SMB Shares</div>
+            <div class="text-2" id="dash-shares">—</div>
+          </div>
+          <div class="card-sm">
+            <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Users</div>
+            <div class="text-2" id="dash-users">—</div>
+          </div>
+        </div>
+        <div id="prereq-banner" class="hidden" style="margin-top:20px;"></div>
+      </div>
+
+      <!-- PREREQUISITES -->
+      <div class="page hidden" id="page-prereqs">
+        <div class="page-header">
+          <h2>Prerequisites</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadPrereqs()">↻ Refresh</button>
+        </div>
+        <div class="card" style="max-width:640px;">
+          <p class="text-2" style="font-size:14px;margin-bottom:20px;">
+            The following packages are required for ZFS NAS to operate. All commands run with <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:12px;">sudo</code>.
+          </p>
+          <div id="prereq-list">
+            <div style="color:var(--text-3);text-align:center;padding:24px;">Checking…</div>
+          </div>
+          <div class="divider"></div>
+          <div id="prereq-actions" class="hidden">
+            <button class="btn btn-primary" onclick="openInstallModal()" id="btn-install-pkgs">
+              Install Missing Packages
+            </button>
+          </div>
+          <div id="prereq-all-ok" class="hidden">
+            <div style="color:var(--accent-3);font-size:14px;font-weight:600;">✓ All prerequisites installed</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Systemd service -->
+          <h3 style="margin-bottom:12px;">Systemd Service</h3>
+          <div id="service-status" style="color:var(--text-3);font-size:14px;">Checking…</div>
+          <div id="btn-install-service-wrap" class="hidden" style="margin-top:12px;">
+            <button class="btn btn-primary btn-sm" onclick="installService()">Install as Systemd Service</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- USERS -->
+      <div class="page hidden" id="page-users">
+        <div class="page-header">
+          <h2>User Management</h2>
+          <button class="btn btn-primary btn-sm" onclick="openCreateUser()" id="btn-create-user">+ Add User</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Created</th><th></th></tr></thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:32px;">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FULL ACTIVITY LOG PAGE -->
+      <div class="page hidden" id="page-activity">
+        <div class="page-header">
+          <h2>Activity Log</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadAudit()">↻ Refresh</button>
+        </div>
+        <div class="card" id="activity-list">
+          <div style="color:var(--text-3);text-align:center;padding:24px;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- PHYSICAL DISKS -->
+      <div class="page hidden" id="page-disks">
+        <div class="page-header">
+          <h2>Physical Disks</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="scanDisks()"   id="btn-scan-disks">⬡ Scan for Disks</button>
+            <button class="btn btn-ghost btn-sm" onclick="refreshDisks()" id="btn-refresh-disks">↻ Refresh SMART</button>
+          </div>
+        </div>
+        <div id="disks-content">
+          <div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>
+        </div>
+      </div>
+      <!-- ZFS POOL -->
+      <div class="page hidden" id="page-pool">
+        <div class="page-header">
+          <h2>ZFS Pool</h2>
+          <div id="pool-header-actions" style="display:flex;gap:8px;"></div>
+        </div>
+        <div id="pool-content"><div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div></div>
+      </div>
+
+      <!-- DATASETS -->
+      <div class="page hidden" id="page-datasets">
+        <div class="page-header">
+          <h2>Datasets</h2>
+          <button class="btn btn-primary btn-sm" onclick="openCreateDataset()">+ Create Dataset</button>
+        </div>
+        <div id="datasets-content"><div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div></div>
+      </div>
+
+      <!-- SNAPSHOTS -->
+      <div class="page hidden" id="page-snapshots">
+        <div class="page-header">
+          <h2>Snapshots</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="loadSnapshots()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <!-- Schedules sub-section -->
+        <div class="card" style="margin-bottom:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 style="margin:0;">Snapshot Schedules</h3>
+            <button class="btn btn-primary btn-sm" onclick="openCreateSchedule()" id="btn-create-schedule">+ Add Policy</button>
+          </div>
+          <div id="schedules-content">
+            <div style="color:var(--text-3);font-size:13px;">Loading schedules…</div>
+          </div>
+        </div>
+
+        <div id="snapshots-content"><div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div></div>
+      </div>
+      <div class="page hidden" id="page-shares">
+        <div class="page-header">
+          <h2>SMB Shares</h2>
+          <button class="btn btn-primary btn-sm" onclick="openCreateShare()" id="btn-create-share">+ New Share</button>
+        </div>
+        <div id="smb-status-banner" style="margin-bottom:16px;"></div>
+        <div id="shares-content">
+          <div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- NFS SHARES -->
+      <div class="page hidden" id="page-nfs">
+        <div class="page-header">
+          <h2>NFS Shares</h2>
+          <button class="btn btn-primary btn-sm" onclick="openCreateNFSShare()" id="btn-create-nfs-share">+ New Share</button>
+        </div>
+        <div id="nfs-status-banner" style="margin-bottom:16px;"></div>
+        <div id="nfs-content">
+          <div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>
+        </div>
+      </div>
+      <div class="page hidden" id="page-updates">
+        <div class="page-header">
+          <h2>OS Updates</h2>
+          <button class="btn btn-ghost btn-sm" onclick="checkUpdates()" id="btn-check-updates">↻ Check for Updates</button>
+        </div>
+
+        <!-- Status card -->
+        <div class="card" style="max-width:720px;margin-bottom:20px;">
+          <div id="updates-status" style="color:var(--text-3);font-size:14px;">Click "Check for Updates" to scan for available packages.</div>
+          <div id="updates-pkg-list" style="margin-top:16px;display:none;">
+            <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:10px;">Available upgrades:</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Package</th><th>New Version</th></tr></thead>
+                <tbody id="updates-pkg-tbody"></tbody>
+              </table>
+            </div>
+            <button class="btn btn-primary" style="margin-top:16px;" onclick="applyUpdates()" id="btn-apply-updates">
+              Apply Updates
+            </button>
+          </div>
+        </div>
+
+        <!-- Live output log -->
+        <div id="updates-log-wrap" class="card" style="max-width:720px;display:none;">
+          <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:10px;">Output</div>
+          <div id="updates-log"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;
+                   font-family:monospace;font-size:12px;line-height:1.6;max-height:420px;overflow-y:auto;
+                   white-space:pre-wrap;color:var(--text-1);"></div>
+        </div>
+      </div>
+      <div class="page hidden" id="page-settings">
+        <div class="page-header">
+          <h2>Settings</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadSettings()">↻ Refresh</button>
+        </div>
+        <div class="card" style="max-width:520px;margin-bottom:20px;">
+          <h3 style="margin-bottom:20px;">General</h3>
+          <div id="settings-alert" class="alert alert-error hidden"></div>
+          <div id="settings-ok" class="alert alert-success hidden" style="margin-bottom:16px;"></div>
+
+          <!-- Storage unit -->
+          <div class="form-group">
+            <label>Storage Unit</label>
+            <div style="display:flex;gap:8px;">
+              <button type="button" onclick="selectStorageUnit('gb')" id="su-gb"
+                class="btn btn-primary" style="flex:1;flex-direction:column;height:auto;padding:12px 10px;">
+                <span style="font-weight:700;">Typical GB</span>
+                <span style="font-size:11px;opacity:.7;font-weight:400;">1 TB = 1,000 GB</span>
+              </button>
+              <button type="button" onclick="selectStorageUnit('gib')" id="su-gib"
+                class="btn btn-ghost" style="flex:1;flex-direction:column;height:auto;padding:12px 10px;">
+                <span style="font-weight:700;">GiB</span>
+                <span style="font-size:11px;opacity:.7;font-weight:400;">1 TiB = 1,024 GiB</span>
+              </button>
+            </div>
+            <div class="text-3 text-sm" style="margin-top:6px;">How storage sizes are displayed throughout the app.</div>
+          </div>
+
+          <!-- Port -->
+          <div class="form-group">
+            <label>Server Port</label>
+            <input type="number" id="settings-port" min="1025" max="65535" value="8443">
+            <div class="text-3 text-sm" style="margin-top:4px;">Requires a server restart to take effect.</div>
+          </div>
+
+          <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:8px;">Save Settings</button>
+        </div>
+
+        <!-- Alerts card -->
+        <div class="card" style="max-width:520px;margin-bottom:20px;">
+          <h3 style="margin-bottom:4px;">Email Alerts</h3>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Send notifications when important events occur.</p>
+          <div id="alerts-alert" class="alert alert-error hidden"></div>
+          <div id="alerts-ok"    class="alert alert-success hidden" style="margin-bottom:16px;"></div>
+
+          <div class="al-section-title">SMTP Configuration</div>
+          <div class="form-group">
+            <label>Host</label>
+            <input type="text" id="al-host" placeholder="smtp.example.com">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 150px;gap:12px;">
+            <div class="form-group">
+              <label>Port</label>
+              <input type="number" id="al-port" value="587" min="1" max="65535">
+            </div>
+            <div class="form-group">
+              <label>Auth Mode</label>
+              <select id="al-auth" onchange="updateAuthFields()">
+                <option value="none">None</option>
+                <option value="plain">PLAIN</option>
+                <option value="starttls" selected>STARTTLS</option>
+                <option value="tls">TLS</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>From Address</label>
+            <input type="email" id="al-from" placeholder="nas@example.com">
+          </div>
+          <div id="al-auth-fields">
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" id="al-username" placeholder="SMTP username" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="al-password" placeholder="SMTP password" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Recipients <span style="color:var(--text-3);font-weight:400;">(one email per line)</span></label>
+            <textarea id="al-to" rows="3" placeholder="admin@example.com&#10;ops@example.com" style="resize:vertical;"></textarea>
+          </div>
+
+          <div class="al-section-title">Event Subscriptions</div>
+          <div>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-pool">    <span>Pool health degraded (DEGRADED / FAULTED)</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-smart">   <span>SMART error detected on any disk</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-wearout"> <span>Disk wearout exceeds <input type="number" id="al-wearout-pct" value="80" min="1" max="100" onclick="event.stopPropagation()">%</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-login">   <span>Failed logins exceed <input type="number" id="al-login-count" value="5" min="1" max="1000" onclick="event.stopPropagation()"> attempts</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-updates"> <span>Ubuntu security updates available</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-scrub">   <span>Scrub completed with errors</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-snapshot"><span>Snapshot auto-policy failure</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-users">   <span>User created / deleted</span></label>
+            <label class="al-event-row"><input type="checkbox" id="al-ev-shares">  <span>Share created / deleted</span></label>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:20px;">
+            <button class="btn btn-primary" onclick="saveAlerts()">Save Alerts</button>
+            <button class="btn btn-ghost"   onclick="testAlert()">Send Test Email</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pages-container -->
+
+    <!-- ===== TERMINAL PANEL ===== -->
+    <div id="term-panel" class="term-panel hidden">
+      <div class="term-panel-header">
+        <span style="font-size:13px;">⌨</span>
+        <span style="font-size:12px;font-weight:600;color:var(--text-2);">Terminal</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost btn-sm" onclick="reconnectTerminal()" id="btn-term-reconnect" style="display:none;padding:2px 10px;font-size:11px;">Reconnect</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleTermPanel()" style="padding:2px 10px;font-size:11px;">✕ Close</button>
+      </div>
+      <div id="terminal-container" style="flex:1;background:#0d0d0f;overflow:hidden;padding:4px 8px;"></div>
+    </div>
+
+    <!-- ===== BOTTOM ACTIVITY BAR ===== -->
+    <div class="activity-bar expanded" id="activity-bar">
+      <div class="activity-bar-header" onclick="toggleActivityBar()">
+        <span style="font-size:13px;">📋</span>
+        <span class="activity-bar-title">Activity</span>
+        <span id="ab-jobs-badge" class="badge badge-ok hidden" style="font-size:10px;"></span>
+        <div style="flex:1"></div>
+        <span id="ab-chevron" style="color:var(--text-3);font-size:11px;transition:transform .2s;transform:rotate(180deg);">▲</span>
+      </div>
+      <div class="activity-bar-body" id="ab-body">
+        <!-- active jobs -->
+        <div id="ab-jobs"></div>
+        <!-- recent audit entries -->
+        <div id="ab-entries">
+          <div style="color:var(--text-3);font-size:12px;padding:8px 0;">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app-layout -->
+
+<!-- ===== MODALS ===== -->
+
+<!-- Add Disks to Pool Modal -->
+<div class="modal-backdrop hidden" id="modal-add-disks">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3>Add Disk(s) to Pool</h3>
+      <button class="modal-close" onclick="closeAddDisksModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error hidden" id="add-disks-alert"></div>
+      <p class="text-2" style="font-size:13px;margin-bottom:16px;">
+        Select one or more available disks to add to the pool. They will be added as a stripe vdev — use this to grow capacity.
+        <strong style="color:var(--accent-warn);">Disk data will be erased.</strong>
+      </p>
+      <div id="add-disks-list" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:280px;overflow-y:auto;">
+        <div style="padding:16px;color:var(--text-3);text-align:center;">Loading…</div>
+      </div>
+      <div id="add-disks-version-warn" style="display:none;margin-top:14px;padding:12px 14px;
+        background:rgba(255,190,46,0.1);border:1px solid var(--accent-warn);border-radius:8px;
+        color:var(--accent-warn);font-size:13px;gap:10px;align-items:flex-start;line-height:1.5;">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAddDisksModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddDisks()" id="btn-add-disks-submit">Add to Pool</button>
+    </div>
+  </div>
+</div>
+
+<!-- Destroy Pool Modal -->
+<div class="modal-backdrop hidden" id="modal-destroy-pool">
+  <div class="modal" style="max-width:480px;border:1px solid var(--accent-danger);">
+    <div class="modal-header" style="background:rgba(255,59,48,0.08);border-bottom:1px solid var(--accent-danger);">
+      <h3 style="color:var(--accent-danger);">⚠ Destroy ZFS Pool</h3>
+      <button class="modal-close" onclick="closeDestroyPoolModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error hidden" id="destroy-pool-alert"></div>
+      <p style="font-size:14px;margin-bottom:8px;color:var(--text-1);">
+        This will <strong>permanently destroy</strong> the pool and all datasets within it.
+        The underlying disks will not be wiped, but all ZFS data will be lost.
+      </p>
+      <p style="font-size:13px;margin-bottom:20px;color:var(--accent-danger);font-weight:600;">
+        This action cannot be undone.
+      </p>
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Type the full pool name to confirm:</label>
+        <input type="text" id="destroy-pool-confirm-input" placeholder="" autocomplete="off"
+          style="border-color:var(--accent-danger);" oninput="checkDestroyConfirm()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDestroyPoolModal()">Cancel</button>
+      <button class="btn" id="btn-destroy-pool-confirm"
+        style="background:var(--accent-danger);color:#fff;opacity:.4;cursor:not-allowed;"
+        disabled onclick="submitDestroyPool()">Destroy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-backdrop hidden" id="modal-create-user">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add User</h3>
+      <button class="modal-close" onclick="closeCreateUser()">✕</button>
+    </div>
+    <div id="modal-user-alert" class="alert alert-error hidden"></div>
+    <form onsubmit="submitCreateUser(event)">
+      <div class="form-group"><label>Username</label><input type="text" id="new-username" required></div>
+      <div class="form-group"><label>Email</label><input type="email" id="new-email"></div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="new-role">
+          <option value="admin">Admin — full access</option>
+          <option value="read-only">Read-Only — browse only</option>
+          <option value="smb-only">SMB-Only — file shares only (no portal login)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Password</label><input type="password" id="new-password" placeholder="Min 8 characters"></div>
+      <div class="flex gap-2" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost" onclick="closeCreateUser()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Set SMB Password Modal -->
+<div class="modal-backdrop hidden" id="modal-smb-password">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div>
+        <h3>Set SMB Password</h3>
+        <div class="text-3 text-sm" id="smb-pw-username-label"></div>
+      </div>
+      <button class="modal-close" onclick="closeSMBPasswordModal()">✕</button>
+    </div>
+    <div id="smb-pw-alert" class="alert alert-error hidden"></div>
+    <div id="smb-pw-ok" class="alert alert-success hidden"></div>
+    <p class="text-2" style="font-size:13px;margin-bottom:16px;">
+      Creates a Linux system account (if needed) and registers the user with Samba so they can access SMB shares.
+    </p>
+    <form onsubmit="submitSMBPassword(event)">
+      <div class="form-group">
+        <label>SMB Password</label>
+        <input type="password" id="smb-pw-input" placeholder="Min 6 characters" required minlength="6">
+      </div>
+      <div class="flex gap-2" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost" onclick="closeSMBPasswordModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;" id="smb-pw-submit">Set Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create Dataset Modal -->
+<div class="modal-backdrop hidden" id="modal-create-dataset">
+  <div class="modal">
+    <div class="modal-header"><h3>Create Dataset</h3><button class="modal-close" onclick="closeCreateDataset()">✕</button></div>
+    <div id="cds-alert" class="alert alert-error hidden"></div>
+    <form onsubmit="submitCreateDataset(event)">
+      <div class="form-group">
+        <label>Parent</label>
+        <select id="cds-parent"></select>
+      </div>
+      <div class="form-group">
+        <label>Dataset Name</label>
+        <input type="text" id="cds-name" placeholder="data" required>
+      </div>
+      <div class="form-group">
+        <label>Quota (0 = no limit)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="cds-quota-amount" min="0" value="0" style="flex:1;">
+          <select id="cds-quota-unit" style="width:80px;"><option>MB</option><option selected>GB</option><option>TB</option></select>
+          <select id="cds-quota-type" style="width:110px;"><option value="quota">quota</option><option value="refquota">refquota</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Compression</label>
+        <select id="cds-compression"><option value="inherit">Inherit from pool</option><option value="lz4">LZ4</option><option value="zstd">ZSTD</option><option value="off">Off</option></select>
+      </div>
+      <div class="flex gap-2" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost" onclick="closeCreateDataset()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Dataset Modal -->
+<div class="modal-backdrop hidden" id="modal-edit-dataset">
+  <div class="modal">
+    <div class="modal-header">
+      <div><h3>Edit Dataset</h3><div class="text-3 text-sm" id="eds-name" style="font-family:monospace;"></div></div>
+      <button class="modal-close" onclick="closeEditDataset()">✕</button>
+    </div>
+    <div id="eds-alert" class="alert alert-error hidden"></div>
+    <form onsubmit="submitEditDataset(event)">
+      <div class="form-group">
+        <label>Quota (0 = no limit)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="eds-quota-amount" min="0" value="0" style="flex:1;">
+          <select id="eds-quota-unit" style="width:80px;"><option>MB</option><option selected>GB</option><option>TB</option></select>
+          <select id="eds-quota-type" style="width:110px;"><option value="quota">quota</option><option value="refquota">refquota</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Compression</label>
+        <select id="eds-compression"><option value="inherit">Inherit</option><option value="lz4">LZ4</option><option value="zstd">ZSTD</option><option value="off">Off</option></select>
+      </div>
+      <div class="flex gap-2" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost" onclick="closeEditDataset()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create / Edit Snapshot Schedule Modal -->
+<div class="modal-backdrop hidden" id="modal-schedule">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header">
+      <h3 id="sched-modal-title">New Snapshot Policy</h3>
+      <button class="modal-close" onclick="closeScheduleModal()">✕</button>
+    </div>
+    <div id="sched-alert" class="alert alert-error hidden"></div>
+    <form onsubmit="submitSchedule(event)">
+      <div class="form-group">
+        <label>Dataset</label>
+        <select id="sched-dataset"></select>
+      </div>
+      <div class="form-group">
+        <label>Label <span class="text-3 text-xs">(snapshot name prefix)</span></label>
+        <input type="text" id="sched-label" value="auto" placeholder="auto">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label>Frequency</label>
+          <select id="sched-freq" onchange="updateSchedFields()">
+            <option value="hourly">Hourly</option>
+            <option value="daily" selected>Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Retention <span class="text-3 text-xs">(keep last N)</span></label>
+          <input type="number" id="sched-retention" value="7" min="1" max="999">
+        </div>
+      </div>
+      <div id="sched-time-fields">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div class="form-group" id="sched-weekday-group" style="display:none;">
+            <label>Day of week</label>
+            <select id="sched-weekday">
+              <option value="0">Sunday</option><option value="1">Monday</option>
+              <option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          <div class="form-group" id="sched-dom-group" style="display:none;">
+            <label>Day of month</label>
+            <input type="number" id="sched-dom" value="1" min="1" max="28">
+          </div>
+          <div class="form-group" id="sched-hour-group">
+            <label>Hour (0–23)</label>
+            <input type="number" id="sched-hour" value="2" min="0" max="23">
+          </div>
+          <div class="form-group" id="sched-minute-group">
+            <label>Minute (0–59)</label>
+            <input type="number" id="sched-minute" value="0" min="0" max="59">
+          </div>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;margin-bottom:20px;">
+        <input type="checkbox" id="sched-enabled" checked style="width:15px;height:15px;accent-color:var(--accent-2);"> Enabled
+      </label>
+      <div class="flex gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeScheduleModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;" id="sched-submit-btn">Create Policy</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Snapshot Modal -->
+<div class="modal-backdrop hidden" id="modal-snapshot">
+  <div class="modal">
+    <div class="modal-header"><h3>Create Snapshot</h3><button class="modal-close" onclick="closeSnapshotModal()">✕</button></div>
+    <form onsubmit="submitCreateSnapshot(event)">
+      <div class="form-group">
+        <label>Dataset</label>
+        <input type="text" id="snap-dataset" readonly style="opacity:.6;">
+      </div>
+      <div class="form-group">
+        <label>Label</label>
+        <input type="text" id="snap-label" placeholder="before-update" autocomplete="off">
+      </div>
+      <p class="text-3 text-sm" style="margin-bottom:16px;">A timestamp will be appended automatically.</p>
+      <div class="flex gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeSnapshotModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;">Create Snapshot</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create / Edit Share Modal -->
+<div class="modal-backdrop hidden" id="modal-share">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 id="share-modal-title">New Share</h3>
+      <button class="modal-close" onclick="closeShareModal()">✕</button>
+    </div>
+    <div id="share-alert" class="alert alert-error hidden"></div>
+    <form onsubmit="submitShare(event)">
+      <div class="form-group">
+        <label>Share Name <span class="text-3 text-xs">(visible on the network)</span></label>
+        <input type="text" id="share-name" placeholder="Media" required autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Path</label>
+        <select id="share-path-select" onchange="sharePathSelect(this.value)">
+          <option value="">— Select a ZFS dataset —</option>
+        </select>
+        <input type="text" id="share-path" placeholder="/tank/media" required style="margin-top:6px;"
+               oninput="document.getElementById('share-path-select').value=''">
+        <div class="text-3 text-xs" style="margin-top:4px;">Choose a dataset or type a custom path.</div>
+      </div>
+      <div class="form-group">
+        <label>Comment <span class="text-3 text-xs">(optional description)</span></label>
+        <input type="text" id="share-comment" placeholder="Family media files" autocomplete="off">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+          <input type="checkbox" id="share-browseable" checked style="width:15px;height:15px;accent-color:var(--accent-2);">
+          <span>Browseable</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+          <input type="checkbox" id="share-readonly" style="width:15px;height:15px;accent-color:var(--accent-2);">
+          <span>Read-only</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+          <input type="checkbox" id="share-guestok" style="width:15px;height:15px;accent-color:var(--accent-2);">
+          <span>Guest OK</span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label>Valid Users <span class="text-3 text-xs">(leave empty = any authenticated user)</span></label>
+        <div id="share-users-list" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:160px;overflow-y:auto;">
+          <div style="padding:12px;color:var(--text-3);font-size:13px;">Loading users…</div>
+        </div>
+      </div>
+
+      <div class="flex gap-2" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost" onclick="closeShareModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;" id="share-submit-btn">Create Share</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Create / Edit NFS Share Modal -->
+<div class="modal-backdrop hidden" id="modal-nfs-share">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header">
+      <h3 id="nfs-modal-title">New NFS Share</h3>
+      <button class="modal-close" onclick="closeNFSShareModal()">✕</button>
+    </div>
+    <div id="nfs-share-alert" class="alert alert-error hidden"></div>
+    <form onsubmit="submitNFSShare(event)">
+      <div class="form-group">
+        <label>Dataset Path</label>
+        <select id="nfs-path-select" onchange="if(this.value) document.getElementById('nfs-path').value=this.value">
+          <option value="">— Select a ZFS dataset —</option>
+        </select>
+        <input type="text" id="nfs-path" placeholder="/tank/data" required style="margin-top:6px;"
+               oninput="document.getElementById('nfs-path-select').value=''">
+        <div class="text-3 text-xs" style="margin-top:4px;">Choose a dataset or type a custom path.</div>
+      </div>
+      <div class="form-group">
+        <label>Client <span class="text-3 text-xs">(CIDR or * for all hosts)</span></label>
+        <input type="text" id="nfs-client" placeholder="10.0.0.0/8 or *" value="*">
+      </div>
+      <div class="form-group">
+        <label>Comment <span class="text-3 text-xs">(optional)</span></label>
+        <input type="text" id="nfs-comment" placeholder="Description" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Options</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+            <input type="checkbox" id="nfs-readonly" style="width:15px;height:15px;accent-color:var(--accent-2);"> Read-only
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+            <input type="checkbox" id="nfs-sync" checked style="width:15px;height:15px;accent-color:var(--accent-2);"> sync
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+            <input type="checkbox" id="nfs-nosubtree" checked style="width:15px;height:15px;accent-color:var(--accent-2);"> no_subtree_check
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+            <input type="checkbox" id="nfs-norootsquash" style="width:15px;height:15px;accent-color:var(--accent-2);"> no_root_squash
+          </label>
+        </div>
+      </div>
+      <div class="flex gap-2" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost" onclick="closeNFSShareModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="flex:1;" id="nfs-submit-btn">Create Share</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Install Packages Modal -->
+<div class="modal-backdrop hidden" id="modal-install">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3>Install Missing Packages</h3>
+      <button class="modal-close" id="btn-close-install" onclick="closeInstallModal()">✕</button>
+    </div>
+    <p class="text-2" style="font-size:14px;margin-bottom:16px;">
+      The following command will be run with <code style="background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:12px;">sudo apt-get install</code>:
+    </p>
+    <div id="install-pkg-list" style="margin-bottom:16px;"></div>
+    <div class="stream-box hidden" id="install-stream">Waiting for output…</div>
+    <div id="install-actions" style="margin-top:16px;display:flex;gap:8px;">
+      <button class="btn btn-ghost" onclick="closeInstallModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="startInstall()" id="btn-start-install" style="flex:1;">
+        Install Now
+      </button>
+    </div>
+    <div id="install-done" class="alert alert-success hidden" style="margin-top:12px;"></div>
+
+    <!-- Systemd service prompt (shown after install) -->
+    <div id="service-prompt" class="hidden" style="margin-top:16px;">
+      <div class="divider"></div>
+      <h3 style="margin-bottom:8px;">Install as Systemd Service?</h3>
+      <p class="text-2" style="font-size:13px;margin-bottom:12px;">
+        This will register ZFS NAS to start automatically on boot, running as the current user from the current directory.
+      </p>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="skipService()">Skip</button>
+        <button class="btn btn-primary btn-sm" onclick="installService()" style="flex:1;">
+          Yes, install service
+        </button>
+      </div>
+      <div id="service-install-result" class="hidden" style="margin-top:10px;font-size:13px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Constants =====
+const COLORS = [
+  ['#bf5af2','#9b40d4'], ['#0a84ff','#0066cc'], ['#32d74b','#25a838'],
+  ['#ff9f0a','#cc7f08'], ['#30d158','#20a040'], ['#5e5ce6','#4848c4'],
+  ['#64d2ff','#3eb5e0'], ['#ffd60a','#cc9f00'],
+];
+const gradientFor = i => `linear-gradient(90deg,${COLORS[i%COLORS.length][0]},${COLORS[i%COLORS.length][1]})`;
+const dotFor      = i => COLORS[i%COLORS.length][0];
+
+// ===== State =====
+let currentUser  = null;
+let abExpanded   = true;
+let abRefreshInt = null;
+let activeJobs   = {};  // id -> { label, startedAt }
+let prereqData   = null;
+let appSettings  = { port: 8443, storage_unit: 'gb' };
+
+// ===== Init =====
+(async () => {
+  try {
+    const resp = await fetch('/api/auth/me');
+    if (!resp.ok) { window.location.href = '/login'; return; }
+    currentUser = await resp.json();
+    document.getElementById('current-user-info').textContent =
+      currentUser.username + ' · ' + currentUser.role;
+    if (currentUser.role !== 'admin') {
+      document.getElementById('nav-terminal').style.display = 'none';
+      document.getElementById('btn-create-user').style.display = 'none';
+    }
+  } catch { window.location.href = '/login'; return; }
+
+  await loadSettings();
+  showPage('dashboard');
+  startActivityBarRefresh();
+  checkPrereqsBanner();
+  refreshPoolBar();
+  // Refresh pool bar every 60s.
+  setInterval(refreshPoolBar, 60000);
+  startIOPoller();
+})();
+
+// ===== Navigation =====
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const page = document.getElementById('page-' + name) || document.getElementById('page-dashboard');
+  page.classList.remove('hidden');
+  const nav = document.getElementById('nav-' + name);
+  if (nav) nav.classList.add('active');
+  if (name === 'users')     loadUsers();
+  if (name === 'activity')  loadAudit();
+  if (name === 'prereqs')   loadPrereqs();
+  if (name === 'disks')     loadDisks();
+  if (name === 'pool')      loadPool();
+  if (name === 'datasets')  loadDatasets();
+  if (name === 'snapshots') { loadSnapshots(); loadSchedules(); }
+  if (name !== 'pool')      _clearPoolStatusInterval();
+  if (name === 'shares')    loadShares();
+  if (name === 'nfs')       loadNFSShares();
+  if (name === 'settings')  { loadSettings(); loadAlerts(); }
+  if (name === 'updates')   initUpdatesPage();
+}
+
+// ===== Logout =====
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+// ===== Activity Bar =====
+function toggleActivityBar() {
+  abExpanded = !abExpanded;
+  const bar = document.getElementById('activity-bar');
+  bar.classList.toggle('expanded', abExpanded);
+  bar.classList.toggle('collapsed', !abExpanded);
+  document.getElementById('ab-chevron').style.transform = abExpanded ? 'rotate(180deg)' : '';
+  if (abExpanded) refreshActivityBar();
+}
+
+function startActivityBarRefresh() {
+  refreshActivityBar();
+  abRefreshInt = setInterval(refreshActivityBar, 10000);
+}
+
+async function refreshActivityBar() {
+  try {
+    const resp = await fetch('/api/audit');
+    if (!resp.ok) return;
+    const entries = await resp.json();
+    renderActivityBar(entries || []);
+  } catch {}
+}
+
+function renderActivityBar(entries) {
+  // Active jobs
+  const jobsEl = document.getElementById('ab-jobs');
+  const jobList = Object.values(activeJobs);
+  const badge   = document.getElementById('ab-jobs-badge');
+  if (jobList.length) {
+    badge.textContent = jobList.length + ' active';
+    badge.classList.remove('hidden');
+    jobsEl.innerHTML = jobList.map(j => `
+      <div class="ab-job-row">
+        <span class="spinner" style="width:12px;height:12px;border-width:2px;"></span>
+        <span>${esc(j.label)}</span>
+        <span class="text-3" style="margin-left:auto;">${timeSince(j.startedAt)}</span>
+      </div>
+    `).join('');
+  } else {
+    badge.classList.add('hidden');
+    jobsEl.innerHTML = '';
+  }
+
+  // Recent entries (newest first, last 15)
+  const entriesEl = document.getElementById('ab-entries');
+  if (!entries.length) {
+    entriesEl.innerHTML = '<div style="color:var(--text-3);font-size:12px;padding:6px 0;">No activity yet.</div>';
+    return;
+  }
+  const recent = [...entries].reverse().slice(0, 15);
+  entriesEl.innerHTML = recent.map(e => `
+    <div class="ab-row">
+      <span class="ab-time">${shortTime(e.timestamp)}</span>
+      <span class="ab-icon">${e.result === 'ok' ? '✅' : '❌'}</span>
+      <span>
+        <span class="ab-user">${esc(e.user)}</span>
+        <span class="ab-action"> ${esc(e.action.replace(/_/g,' '))}</span>
+        ${e.target ? `<span class="ab-target"> → ${esc(e.target)}</span>` : ''}
+      </span>
+    </div>
+  `).join('');
+}
+
+function addActiveJob(id, label) {
+  activeJobs[id] = { label, startedAt: new Date() };
+  renderActivityBar([]);  // update jobs section immediately
+}
+function removeActiveJob(id) {
+  delete activeJobs[id];
+  refreshActivityBar();
+}
+
+// ===== Prerequisites =====
+async function checkPrereqsBanner() {
+  try {
+    const resp = await fetch('/api/prereqs');
+    if (!resp.ok) return;
+    prereqData = await resp.json();
+    const missing = prereqData.packages.filter(p => !p.installed);
+    const banner  = document.getElementById('prereq-banner');
+    if (missing.length) {
+      banner.className = 'banner banner-warn';
+      banner.innerHTML = `
+        ⚠ ${missing.length} required package${missing.length>1?'s are':' is'} missing.
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="showPage('prereqs')">
+          Fix now →
+        </button>
+      `;
+      banner.classList.remove('hidden');
+    }
+  } catch {}
+}
+
+async function loadPrereqs() {
+  document.getElementById('prereq-list').innerHTML =
+    '<div style="color:var(--text-3);text-align:center;padding:16px;">Checking…</div>';
+  document.getElementById('prereq-actions').classList.add('hidden');
+  document.getElementById('prereq-all-ok').classList.add('hidden');
+  document.getElementById('service-status').textContent = 'Checking…';
+  document.getElementById('btn-install-service-wrap').classList.add('hidden');
+
+  try {
+    const resp = await fetch('/api/prereqs');
+    if (!resp.ok) throw new Error();
+    prereqData = await resp.json();
+  } catch {
+    document.getElementById('prereq-list').innerHTML =
+      '<div style="color:var(--accent-danger);padding:16px;">Failed to check prerequisites.</div>';
+    return;
+  }
+
+  const missing = prereqData.packages.filter(p => !p.installed);
+
+  document.getElementById('prereq-list').innerHTML = prereqData.packages.map(p => `
+    <div class="prereq-row">
+      <div>
+        <div class="prereq-name">${esc(p.name)}</div>
+        <div class="prereq-desc">${esc(p.description)}</div>
+      </div>
+      <span class="${p.installed ? 'prereq-status-ok' : 'prereq-status-miss'}">
+        ${p.installed ? '✓ Installed' : '✕ Missing'}
+      </span>
+    </div>
+  `).join('');
+
+  if (missing.length) {
+    document.getElementById('prereq-actions').classList.remove('hidden');
+    document.getElementById('btn-install-pkgs').textContent =
+      `Install ${missing.length} Missing Package${missing.length>1?'s':''}`;
+  } else {
+    document.getElementById('prereq-all-ok').classList.remove('hidden');
+  }
+
+  // Service status
+  const svcEl = document.getElementById('service-status');
+  if (prereqData.service_installed) {
+    svcEl.innerHTML = '<span style="color:var(--accent-3);">✓ systemd service installed — ZFS NAS will start on boot</span>';
+  } else {
+    svcEl.innerHTML = '<span style="color:var(--text-2);">Not installed as a systemd service.</span>';
+    if (currentUser.role === 'admin') {
+      document.getElementById('btn-install-service-wrap').classList.remove('hidden');
+    }
+  }
+}
+
+function openInstallModal() {
+  if (!prereqData) return;
+  const missing = prereqData.packages.filter(p => !p.installed);
+  document.getElementById('install-pkg-list').innerHTML = missing.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:14px;">
+      <span style="color:var(--accent-danger);">✕</span>
+      <span style="font-weight:600;">${esc(p.name)}</span>
+      <span style="color:var(--text-3);">${esc(p.description)}</span>
+    </div>
+  `).join('');
+  document.getElementById('install-stream').classList.add('hidden');
+  document.getElementById('install-stream').textContent = '';
+  document.getElementById('install-actions').classList.remove('hidden');
+  document.getElementById('install-done').classList.add('hidden');
+  document.getElementById('service-prompt').classList.add('hidden');
+  document.getElementById('btn-close-install').classList.remove('hidden');
+  document.getElementById('modal-install').classList.remove('hidden');
+}
+function closeInstallModal() {
+  document.getElementById('modal-install').classList.add('hidden');
+  loadPrereqs();
+  checkPrereqsBanner();
+}
+
+function startInstall() {
+  document.getElementById('btn-start-install').disabled = true;
+  document.getElementById('btn-start-install').innerHTML = '<span class="spinner"></span> Installing…';
+  document.getElementById('btn-close-install').classList.add('hidden');
+  document.getElementById('install-stream').classList.remove('hidden');
+  document.getElementById('install-stream').textContent = '';
+
+  addActiveJob('prereqs-install', 'Installing packages…');
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws/prereqs-install`);
+  const box = document.getElementById('install-stream');
+
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.line !== undefined) {
+      box.textContent += msg.line + '\n';
+      box.scrollTop = box.scrollHeight;
+    }
+    if (msg.done) {
+      removeActiveJob('prereqs-install');
+      document.getElementById('install-actions').classList.add('hidden');
+      if (msg.success) {
+        document.getElementById('install-done').textContent = '✓ All packages installed successfully.';
+        document.getElementById('install-done').className = 'alert alert-success';
+        document.getElementById('install-done').classList.remove('hidden');
+        // Offer systemd service install
+        if (!prereqData.service_installed) {
+          document.getElementById('service-prompt').classList.remove('hidden');
+        }
+      } else {
+        document.getElementById('install-done').textContent = '✕ Installation failed. Check the output above.';
+        document.getElementById('install-done').className = 'alert alert-error';
+        document.getElementById('install-done').classList.remove('hidden');
+        document.getElementById('btn-close-install').classList.remove('hidden');
+      }
+    }
+  };
+
+  ws.onerror = () => {
+    removeActiveJob('prereqs-install');
+    box.textContent += '\n[WebSocket error — connection lost]\n';
+    document.getElementById('btn-close-install').classList.remove('hidden');
+  };
+}
+
+async function installService() {
+  const resultEl = document.getElementById('service-install-result');
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+
+  try {
+    const resp = await fetch('/api/prereqs/install-service', { method: 'POST' });
+    const data = await resp.json();
+    if (resp.ok) {
+      resultEl.innerHTML = '<span style="color:var(--accent-3);">✓ ' + esc(data.message) + '</span>';
+    } else {
+      resultEl.innerHTML = '<span style="color:var(--accent-danger);">✕ ' + esc(data.error) + '</span>';
+    }
+    resultEl.classList.remove('hidden');
+  } catch {
+    resultEl.innerHTML = '<span style="color:var(--accent-danger);">Network error.</span>';
+    resultEl.classList.remove('hidden');
+  }
+  // Also refresh prereqs page service status
+  setTimeout(loadPrereqs, 500);
+}
+
+function skipService() {
+  closeInstallModal();
+}
+
+// ===== Users =====
+async function loadUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">Loading…</td></tr>';
+  try {
+    const resp  = await fetch('/api/users');
+    const users = await resp.json();
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:24px;">No users found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td><div class="user-row-name"><div class="avatar">${u.username[0].toUpperCase()}</div><span>${esc(u.username)}</span></div></td>
+        <td class="text-2">${esc(u.email||'—')}</td>
+        <td><span class="badge badge-${roleBadge(u.role)}">${esc(u.role)}</span></td>
+        <td class="text-2 text-sm">${formatDate(u.created_at)}</td>
+        <td>${currentUser.role==='admin' ? `
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="openSMBPasswordModal('${esc(u.username)}')" title="Set SMB password">SMB</button>
+            ${u.id!==currentUser.user_id ? `<button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteUser('${u.id}','${esc(u.username)}')">Delete</button>` : ''}
+          </div>` : ''}</td>
+      </tr>
+    `).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--accent-danger);padding:24px;">Failed to load users.</td></tr>';
+  }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  const resp = await fetch('/api/users/' + id, { method: 'DELETE' });
+  const data = await resp.json();
+  if (resp.ok) loadUsers(); else alert(data.error || 'Failed to delete user.');
+}
+
+let smbPwUsername = '';
+function openSMBPasswordModal(username) {
+  smbPwUsername = username;
+  document.getElementById('smb-pw-username-label').textContent = username;
+  document.getElementById('smb-pw-input').value = '';
+  document.getElementById('smb-pw-alert').classList.add('hidden');
+  document.getElementById('smb-pw-ok').classList.add('hidden');
+  document.getElementById('modal-smb-password').classList.remove('hidden');
+  document.getElementById('smb-pw-input').focus();
+}
+function closeSMBPasswordModal() {
+  document.getElementById('modal-smb-password').classList.add('hidden');
+}
+async function submitSMBPassword(e) {
+  e.preventDefault();
+  const alertEl  = document.getElementById('smb-pw-alert');
+  const okEl     = document.getElementById('smb-pw-ok');
+  const submitBtn = document.getElementById('smb-pw-submit');
+  alertEl.classList.add('hidden');
+  okEl.classList.add('hidden');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner"></span>';
+  const resp = await fetch('/api/shares/set-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: smbPwUsername, password: document.getElementById('smb-pw-input').value }),
+  });
+  const data = await resp.json();
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Set Password';
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to set SMB password.';
+    alertEl.classList.remove('hidden');
+  } else {
+    okEl.textContent = `✓ ${data.message}`;
+    okEl.classList.remove('hidden');
+  }
+}
+
+function openCreateUser() {
+  document.getElementById('modal-create-user').classList.remove('hidden');
+  document.getElementById('modal-user-alert').classList.add('hidden');
+  document.getElementById('new-username').focus();
+}
+function closeCreateUser() { document.getElementById('modal-create-user').classList.add('hidden'); }
+
+async function submitCreateUser(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('modal-user-alert');
+  alertEl.classList.add('hidden');
+  const resp = await fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('new-username').value.trim(),
+      email:    document.getElementById('new-email').value.trim(),
+      role:     document.getElementById('new-role').value,
+      password: document.getElementById('new-password').value,
+    }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to create user.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  closeCreateUser();
+  loadUsers();
+}
+
+// ===== Full Audit Log Page =====
+async function loadAudit() {
+  const el = document.getElementById('activity-list');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:24px;">Loading…</div>';
+  try {
+    const resp    = await fetch('/api/audit');
+    const entries = await resp.json();
+    if (!entries||!entries.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>No activity recorded yet.</p></div>';
+      return;
+    }
+    el.innerHTML = [...entries].reverse().slice(0,500).map(e => `
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span style="color:var(--text-3);white-space:nowrap;min-width:140px;font-size:12px;">${formatDate(e.timestamp)}</span>
+        <span>${e.result==='ok'?'✅':'❌'}</span>
+        <div>
+          <span style="font-weight:600;">${esc(e.user)}</span>
+          <span class="text-2"> ${esc(e.action.replace(/_/g,' '))}</span>
+          ${e.target?`<span class="text-3"> → ${esc(e.target)}</span>`:''}
+          ${e.details?`<div class="text-3 text-sm mt-1">${esc(e.details)}</div>`:''}
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load activity log.</div>';
+  }
+}
+
+// ===== Settings =====
+async function loadSettings() {
+  try {
+    const resp = await fetch('/api/settings');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    appSettings = { ...appSettings, ...data };
+    const portEl = document.getElementById('settings-port');
+    if (portEl) portEl.value = appSettings.port;
+    selectStorageUnit(appSettings.storage_unit || 'gb', false);
+  } catch {}
+}
+
+function selectStorageUnit(unit, save) {
+  appSettings.storage_unit = unit;
+  ['gb', 'gib'].forEach(u => {
+    const btn = document.getElementById('su-' + u);
+    if (!btn) return;
+    btn.className = 'btn ' + (u === unit ? 'btn-primary' : 'btn-ghost');
+    btn.style.flex = '1';
+    btn.style.flexDirection = 'column';
+    btn.style.height = 'auto';
+    btn.style.padding = '12px 10px';
+  });
+}
+
+async function saveSettings() {
+  const alertEl = document.getElementById('settings-alert');
+  const okEl    = document.getElementById('settings-ok');
+  alertEl.classList.add('hidden');
+  okEl.classList.add('hidden');
+
+  const portEl = document.getElementById('settings-port');
+  const port   = portEl ? parseInt(portEl.value) : appSettings.port;
+
+  const resp = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ port, storage_unit: appSettings.storage_unit }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to save settings.';
+    alertEl.classList.remove('hidden');
+  } else {
+    okEl.textContent = data.message || 'Settings saved.';
+    okEl.classList.remove('hidden');
+    // Re-render pool bar with updated units.
+    renderPoolBar();
+  }
+}
+
+// ===== Alerts =====
+async function loadAlerts() {
+  try {
+    const resp = await fetch('/api/alerts');
+    if (!resp.ok) return;
+    const d = await resp.json();
+    document.getElementById('al-host').value     = d.smtp?.host      || '';
+    document.getElementById('al-port').value     = d.smtp?.port      || 587;
+    document.getElementById('al-from').value     = d.smtp?.from      || '';
+    document.getElementById('al-auth').value     = d.smtp?.auth_mode || 'starttls';
+    document.getElementById('al-username').value = d.smtp?.username  || '';
+    document.getElementById('al-password').value = d.smtp?.password  || '';
+    document.getElementById('al-to').value       = (d.to || []).join('\n');
+    document.getElementById('al-ev-pool').checked     = !!d.events?.pool_degraded;
+    document.getElementById('al-ev-smart').checked    = !!d.events?.smart_error;
+    document.getElementById('al-ev-wearout').checked  = !!d.events?.wearout_exceeded;
+    document.getElementById('al-wearout-pct').value   = d.events?.wearout_threshold_pct  || 80;
+    document.getElementById('al-ev-login').checked    = !!d.events?.failed_login_alert;
+    document.getElementById('al-login-count').value   = d.events?.failed_login_threshold || 5;
+    document.getElementById('al-ev-updates').checked  = !!d.events?.security_updates;
+    document.getElementById('al-ev-scrub').checked    = !!d.events?.scrub_errors;
+    document.getElementById('al-ev-snapshot').checked = !!d.events?.snapshot_failure;
+    document.getElementById('al-ev-users').checked    = !!d.events?.user_created_deleted;
+    document.getElementById('al-ev-shares').checked   = !!d.events?.share_created_deleted;
+    updateAuthFields();
+  } catch {}
+}
+
+function updateAuthFields() {
+  const mode = document.getElementById('al-auth').value;
+  document.getElementById('al-auth-fields').style.display = mode === 'none' ? 'none' : '';
+}
+
+async function saveAlerts() {
+  const alertEl = document.getElementById('alerts-alert');
+  const okEl    = document.getElementById('alerts-ok');
+  alertEl.classList.add('hidden');
+  okEl.classList.add('hidden');
+  const body = {
+    smtp: {
+      host:      document.getElementById('al-host').value.trim(),
+      port:      parseInt(document.getElementById('al-port').value) || 587,
+      from:      document.getElementById('al-from').value.trim(),
+      auth_mode: document.getElementById('al-auth').value,
+      username:  document.getElementById('al-username').value,
+      password:  document.getElementById('al-password').value,
+    },
+    to: document.getElementById('al-to').value.split('\n').map(s => s.trim()).filter(Boolean),
+    events: {
+      pool_degraded:          document.getElementById('al-ev-pool').checked,
+      smart_error:            document.getElementById('al-ev-smart').checked,
+      wearout_exceeded:       document.getElementById('al-ev-wearout').checked,
+      wearout_threshold_pct:  parseInt(document.getElementById('al-wearout-pct').value)  || 80,
+      failed_login_alert:     document.getElementById('al-ev-login').checked,
+      failed_login_threshold: parseInt(document.getElementById('al-login-count').value)  || 5,
+      security_updates:       document.getElementById('al-ev-updates').checked,
+      scrub_errors:           document.getElementById('al-ev-scrub').checked,
+      snapshot_failure:       document.getElementById('al-ev-snapshot').checked,
+      user_created_deleted:   document.getElementById('al-ev-users').checked,
+      share_created_deleted:  document.getElementById('al-ev-shares').checked,
+    },
+  };
+  const resp = await fetch('/api/alerts', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to save alert settings.';
+    alertEl.classList.remove('hidden');
+  } else {
+    okEl.textContent = data.message || 'Alert settings saved.';
+    okEl.classList.remove('hidden');
+  }
+}
+
+async function testAlert() {
+  const alertEl = document.getElementById('alerts-alert');
+  const okEl    = document.getElementById('alerts-ok');
+  alertEl.classList.add('hidden');
+  okEl.classList.add('hidden');
+  const resp = await fetch('/api/alerts/test', { method: 'POST' });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to send test email.';
+    alertEl.classList.remove('hidden');
+  } else {
+    okEl.textContent = data.message || 'Test email sent.';
+    okEl.classList.remove('hidden');
+  }
+}
+
+// ===== Storage unit formatter =====
+function fmtBytes(n) {
+  if (!n || n <= 0) return '0 B';
+  const useGib = appSettings.storage_unit === 'gib';
+  const base = useGib ? 1024 : 1000;
+  if (n < base) return n + ' B';
+  const suffixes = useGib
+    ? ['KiB', 'MiB', 'GiB', 'TiB', 'PiB']
+    : ['KB',  'MB',  'GB',  'TB',  'PB'];
+  let val = n, idx = -1;
+  while (val >= base && idx < suffixes.length - 1) { val /= base; idx++; }
+  return (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) + ' ' + suffixes[idx];
+}
+
+// ===== Pool bar chart =====
+let poolData = null;
+let datasetData = [];
+
+async function refreshPoolBar() {
+  try {
+    const [pr, dr] = await Promise.all([fetch('/api/pool'), fetch('/api/datasets')]);
+    poolData   = pr.ok ? await pr.json() : null;
+    datasetData = dr.ok ? await dr.json() : [];
+  } catch { return; }
+  renderPoolBar();
+}
+
+function renderPoolBar() {
+  const bar    = document.getElementById('pool-bar');
+  const legend = document.getElementById('pool-legend');
+  const sumEl  = document.getElementById('pool-summary');
+
+  if (!poolData) {
+    bar.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--text-3);font-size:13px;">No pool configured</div>';
+    legend.innerHTML = '';
+    sumEl.textContent = '';
+    return;
+  }
+
+  // Use zfs list usable capacity (root used + avail) — matches what `zfs list` shows.
+  const total = poolData.usable_size || poolData.size;
+  const free  = poolData.usable_avail || poolData.free;
+  const usedByData = poolData.usable_used || poolData.alloc;
+
+  sumEl.textContent = `${poolData.name}  ·  ${fmtBytes(total)} usable  ·  ${fmtBytes(usedByData)} used  ·  ${fmtBytes(free)} free  ·  ${poolData.health}`;
+
+  // Use depth-1 datasets (direct children of pool root) to avoid double-counting.
+  const depth1 = (datasetData || []).filter(d => d.depth === 1);
+  const dsUsedTotal = depth1.reduce((s, d) => s + d.used, 0);
+  // Overhead = root used minus sum of child datasets (ZFS metadata, etc.)
+  const overhead = Math.max(0, usedByData - dsUsedTotal);
+
+  if (!depth1.length && overhead === 0) {
+    bar.innerHTML = `<div class="pool-bar-segment" style="flex:1;background:rgba(255,255,255,0.06);cursor:default;color:var(--text-3);">Free ${fmtBytes(free)}</div>`;
+    legend.innerHTML = '';
+    return;
+  }
+
+  // Build segment list: datasets + overhead + free
+  const segments = [];
+  depth1.forEach((d, i) => {
+    const pct = total > 0 ? (d.used / total * 100) : 0;
+    if (pct >= 0.2) {
+      segments.push({ key: d.name, label: d.short_name, pct, bytes: d.used, color: COLORS[i % COLORS.length], isDs: true, d });
+    }
+  });
+
+  if (overhead > 0) {
+    const pct = total > 0 ? (overhead / total * 100) : 0;
+    if (pct >= 0.3) {
+      segments.push({ key: '__overhead', label: 'System', pct, bytes: overhead, color: ['#636366','#4a4a4e'], isDs: false });
+    }
+  }
+
+  const usedPct = segments.reduce((s, x) => s + x.pct, 0);
+  const freePct = Math.max(0, 100 - usedPct);
+
+  let barHTML = segments.map(({key, label, pct, bytes, color, isDs, d}) => {
+    const showLabel = pct > 6;
+    const tooltip = isDs
+      ? `${key}: ${fmtBytes(bytes)} used${d.quota > 0 ? ' / '+fmtBytes(d.quota)+' quota' : ''}\nCompression: ${d.compress_ratio}`
+      : `Pool overhead / metadata: ${fmtBytes(bytes)}`;
+    return `
+      <div class="pool-bar-segment" style="width:${pct.toFixed(2)}%;background:linear-gradient(180deg,${color[0]},${color[1]});"
+           title="${esc(tooltip)}"${isDs ? ` onclick="openDatasetDetail('${esc(key)}')"` : ''}>
+        ${showLabel ? `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px;">${esc(label)}</span>` : ''}
+        <div class="pool-tooltip">
+          ${isDs ? `<strong>${esc(key)}</strong><br>Used: ${fmtBytes(bytes)}<br>${d.quota>0?'Quota: '+fmtBytes(d.quota)+'<br>':''}Ratio: ${esc(d.compress_ratio)}` : `<strong>System / Overhead</strong><br>${fmtBytes(bytes)}`}
+        </div>
+      </div>`;
+  }).join('');
+
+  if (freePct > 0.3) {
+    barHTML += `<div class="pool-bar-segment" style="flex:1;background:rgba(255,255,255,0.06);cursor:default;color:var(--text-3);">
+      ${freePct > 8 ? `<span style="padding:0 6px;">${fmtBytes(free)} free</span>` : ''}
+    </div>`;
+  }
+
+  bar.innerHTML = barHTML;
+
+  const legendItems = segments.filter(s => s.isDs).map(({key, label, bytes, color, pct}, i) => `
+    <div class="pool-bar-legend-item" onclick="openDatasetDetail('${esc(key)}')">
+      <div class="pool-bar-legend-dot" style="background:${color[0]};box-shadow:0 0 6px ${color[0]}66;"></div>
+      <span>${esc(label)}</span>
+      <span class="text-3" style="margin-left:4px;">${fmtBytes(bytes)}</span>
+    </div>
+  `).join('');
+  const overheadSeg = segments.find(s => !s.isDs);
+  const freeLegend = `
+    <div class="pool-bar-legend-item" style="cursor:default;">
+      <div class="pool-bar-legend-dot" style="background:rgba(255,255,255,0.15);"></div>
+      <span style="color:var(--text-3);">Free</span>
+      <span class="text-3" style="margin-left:4px;">${fmtBytes(free)}</span>
+    </div>`;
+  legend.innerHTML = legendItems + (overheadSeg ? `
+    <div class="pool-bar-legend-item" style="cursor:default;">
+      <div class="pool-bar-legend-dot" style="background:#636366;"></div>
+      <span style="color:var(--text-3);">System</span>
+      <span class="text-3" style="margin-left:4px;">${fmtBytes(overheadSeg.bytes)}</span>
+    </div>` : '') + freeLegend;
+}
+
+// ===== Pool page =====
+let _poolStatusInterval = null;
+
+async function loadPool() {
+  const el = document.getElementById('pool-content');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
+  await refreshPoolBar();
+
+  _clearPoolStatusInterval();
+
+  if (poolData) {
+    renderPoolExists(el, poolData);
+    _startPoolStatusRefresh();
+  } else {
+    renderPoolCreate(el);
+  }
+}
+
+function _clearPoolStatusInterval() {
+  if (_poolStatusInterval) { clearInterval(_poolStatusInterval); _poolStatusInterval = null; }
+}
+
+function _startPoolStatusRefresh() {
+  _fetchPoolStatus(); // immediate first fetch
+  _poolStatusInterval = setInterval(_fetchPoolStatus, 10000);
+}
+
+async function _fetchPoolStatus() {
+  const pre = document.getElementById('pool-status-output');
+  if (!pre) { _clearPoolStatusInterval(); return; }
+  try {
+    const resp = await fetch('/api/pool/status');
+    const data = await resp.json();
+    if (resp.ok) {
+      pre.textContent = data.output || '(no output)';
+      const tick = document.getElementById('pool-status-tick');
+      if (tick) tick.textContent = 'Updated ' + new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }
+  } catch { /* ignore network hiccups */ }
+  _fetchScrubStatus();
+}
+
+function renderPoolExists(el, pool) {
+  const healthColor = pool.health === 'ONLINE' ? 'var(--accent-3)' :
+                      pool.health === 'DEGRADED' ? 'var(--accent-warn)' : 'var(--accent-danger)';
+
+  // Usable = root used + root avail (matches `zfs list`).
+  const usableSize  = pool.usable_size  || pool.size;
+  const usableUsed  = pool.usable_used  || pool.alloc;
+  const usableAvail = pool.usable_avail || pool.free;
+
+  // Inject header action buttons.
+  document.getElementById('pool-header-actions').innerHTML = currentUser.role === 'admin' ? `
+    <button class="btn btn-ghost btn-sm" onclick="detectPools()">🔍 Detect Existing Pool</button>
+    <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);border-color:var(--accent-danger);"
+      onclick="openDestroyPoolModal()">Destroy Pool</button>
+  ` : `<button class="btn btn-ghost btn-sm" onclick="detectPools()">🔍 Detect Existing Pool</button>`;
+
+  // Member disks section.
+  const membersHtml = (pool.members && pool.members.length)
+    ? pool.members.map(m => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:18px;">💿</span>
+          <span style="font-family:monospace;font-size:13px;font-weight:600;">${esc(m)}</span>
+        </div>`).join('')
+    : '<div class="text-3 text-sm" style="padding:10px 0;">No device info available (run SMART refresh)</div>';
+
+  const addDiskBtn = currentUser.role === 'admin'
+    ? `<button class="btn btn-ghost btn-sm" style="margin-top:14px;width:100%;" onclick="openAddDisksModal()">+ Add Disk(s)</button>`
+    : '';
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
+      <div class="card-sm">
+        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Health</div>
+        <div style="font-size:20px;font-weight:700;color:${healthColor};">${esc(pool.health)}</div>
+      </div>
+      <div class="card-sm">
+        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Usable Capacity</div>
+        <div style="font-size:18px;font-weight:700;">${fmtBytes(usableSize)}</div>
+      </div>
+      <div class="card-sm">
+        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Used</div>
+        <div style="font-size:18px;font-weight:700;color:var(--accent-2);">${fmtBytes(usableUsed)}</div>
+      </div>
+      <div class="card-sm">
+        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Available</div>
+        <div style="font-size:18px;font-weight:700;color:var(--accent-3);">${fmtBytes(usableAvail)}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
+      <div class="card" style="min-width:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h3 style="margin:0;">zpool status</h3>
+          <span id="pool-status-tick" style="font-size:11px;color:var(--text-3);">Refreshing every 10s</span>
+        </div>
+        <pre id="pool-status-output"
+          style="margin:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+                 padding:14px 16px;font-size:12px;line-height:1.6;overflow-x:auto;
+                 color:var(--text-1);white-space:pre;">Loading…</pre>
+      </div>
+      <div class="card" style="min-width:0;">
+        <h3 style="margin-bottom:16px;">Pool Details</h3>
+        <div class="stat-row"><span class="stat-label">Pool name</span><span class="stat-value">${esc(pool.name)}</span></div>
+        <div class="stat-row"><span class="stat-label">Health</span><span class="stat-value" style="color:${healthColor};">${esc(pool.health)}</span></div>
+        <div class="stat-row"><span class="stat-label">Usable capacity</span><span class="stat-value">${fmtBytes(usableSize)}</span></div>
+        <div class="stat-row"><span class="stat-label">Used</span><span class="stat-value">${fmtBytes(usableUsed)}</span></div>
+        <div class="stat-row"><span class="stat-label">Available</span><span class="stat-value">${fmtBytes(usableAvail)}</span></div>
+        <div class="stat-row"><span class="stat-label">Raw pool size</span><span class="stat-value text-3" style="font-size:12px;">${fmtBytes(pool.size)}</span></div>
+      </div>
+      <div class="card" style="min-width:0;">
+        <h3 style="margin-bottom:4px;">Physical Disks (${(pool.members||[]).length})</h3>
+        <div class="text-3 text-xs" style="margin-bottom:12px;">Devices that make up this pool</div>
+        ${membersHtml}
+        ${addDiskBtn}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;" id="scrub-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 style="margin:0;">Scrub</h3>
+        <div style="display:flex;align-items:center;gap:8px;" id="scrub-actions">
+          <span style="font-size:12px;color:var(--text-3);">Loading…</span>
+        </div>
+      </div>
+      <div id="scrub-status-body"><div style="color:var(--text-3);font-size:13px;">Loading scrub status…</div></div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+          <input type="checkbox" id="scrub-weekly-toggle" style="width:15px;height:15px;accent-color:var(--accent-2);"
+            onchange="setScrubSchedule(this.checked)">
+          Auto-scrub weekly (Sunday 02:00)
+        </label>
+      </div>
+    </div>`;
+}
+
+function renderPoolCreate(el) {
+  document.getElementById('pool-header-actions').innerHTML =
+    `<button class="btn btn-ghost btn-sm" onclick="detectPools()">🔍 Detect Existing Pool</button>`;
+  el.innerHTML = `
+    <div class="card" style="max-width:600px;">
+      <h3 style="margin-bottom:6px;">Create ZFS Pool</h3>
+      <p class="text-2" style="font-size:14px;margin-bottom:24px;">Select disks and configure your pool. All data on selected disks will be erased.</p>
+
+      <div id="create-pool-alert" class="alert alert-error hidden"></div>
+
+      <div class="form-group">
+        <label>Pool Name</label>
+        <input type="text" id="cp-name" value="tank" placeholder="tank">
+      </div>
+
+      <div class="form-group">
+        <label>Layout</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="cp-layout-btns">
+          ${['stripe','raidz1','raidz2'].map((l,i) => `
+            <button type="button" onclick="selectLayout('${l}')" id="cp-layout-${l}"
+              class="btn ${i===0?'btn-primary':'btn-ghost'}"
+              style="flex:1;min-width:100px;">
+              ${l === 'stripe' ? 'Stripe' : l === 'raidz1' ? 'RAIDZ-1' : 'RAIDZ-2'}
+            </button>`).join('')}
+        </div>
+        <div id="cp-layout-hint" class="text-3 text-sm" style="margin-top:6px;">No redundancy — any disk failure loses data. Min 1 disk.</div>
+      </div>
+
+      <div class="form-group">
+        <label>Block Size (ashift)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${[[9,'512 B','Legacy HDDs'],[12,'4 KB','Recommended'],[13,'8 KB','NVMe SSDs']].map(([v,l,hint],i) => `
+            <button type="button" onclick="selectAshift(${v})" id="cp-ashift-${v}"
+              class="btn ${i===1?'btn-primary':'btn-ghost'}" style="flex:1;min-width:90px;flex-direction:column;height:auto;padding:10px 8px;">
+              <span style="font-weight:700;">${l}</span>
+              <span style="font-size:10px;font-weight:400;opacity:.7;">${hint}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Compression</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${[['off','Off'],['lz4','LZ4 (recommended)'],['zstd','ZSTD (max ratio)']].map(([v,l],i) => `
+            <button type="button" onclick="selectCompression('${v}')" id="cp-comp-${v}"
+              class="btn ${i===1?'btn-primary':'btn-ghost'}" style="flex:1;min-width:90px;">
+              ${l}
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Select Disks <span id="cp-disk-hint" class="text-3" style="font-size:12px;">(loading…)</span></label>
+        <div id="cp-disks" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+          <div style="padding:16px;color:var(--text-3);text-align:center;">Loading available disks…</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary w-full" onclick="submitCreatePool()" style="margin-top:8px;">
+        Create Pool
+      </button>
+    </div>`;
+
+  // Hidden state
+  window._cpLayout = 'stripe';
+  window._cpAshift = 12;
+  window._cpCompression = 'lz4';
+
+  loadPoolDisks();
+}
+
+const layoutHints = {
+  stripe:  'No redundancy — any disk failure loses data. Min 1 disk.',
+  raidz1:  'Single parity — survives 1 disk failure. Min 3 disks.',
+  raidz2:  'Double parity — survives 2 disk failures. Min 4 disks.',
+};
+
+function selectLayout(l) {
+  window._cpLayout = l;
+  ['stripe','raidz1','raidz2'].forEach(x => {
+    document.getElementById('cp-layout-'+x).className = 'btn ' + (x===l?'btn-primary':'btn-ghost');
+  });
+  document.getElementById('cp-layout-hint').textContent = layoutHints[l];
+}
+function selectAshift(v) {
+  window._cpAshift = v;
+  [9,12,13].forEach(x => {
+    document.getElementById('cp-ashift-'+x).className = 'btn ' + (x===v?'btn-primary':'btn-ghost') +
+      ' ' + (x===v?'':'') + ' flex-direction:column;height:auto;padding:10px 8px;flex:1;min-width:90px;';
+  });
+}
+function selectCompression(v) {
+  window._cpCompression = v;
+  ['off','lz4','zstd'].forEach(x => {
+    document.getElementById('cp-comp-'+x).className = 'btn ' + (x===v?'btn-primary':'btn-ghost') + ' flex:1;min-width:90px;';
+  });
+}
+
+async function loadPoolDisks() {
+  const el = document.getElementById('cp-disks');
+  const hint = document.getElementById('cp-disk-hint');
+  let available = [];
+  try {
+    const resp = await fetch('/api/disks');
+    const disks = await resp.json() || [];
+    available = disks.filter(d => !d.in_use);
+  } catch {
+    el.innerHTML = '<div style="padding:16px;color:var(--accent-danger);text-align:center;">Failed to load disks.</div>';
+    return;
+  }
+  if (!available.length) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text-3);text-align:center;">No available disks. Check Physical Disks page.</div>';
+    hint.textContent = '(0 available)';
+    return;
+  }
+  hint.textContent = `(${available.length} available)`;
+  el.innerHTML = available.map(d => `
+    <label style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);">
+      <input type="checkbox" value="${esc(d.device)}" class="cp-disk-cb" style="width:16px;height:16px;accent-color:var(--accent-2);">
+      <div>
+        <div style="font-weight:600;">${esc(d.device)}</div>
+        <div class="text-3 text-sm">${esc(d.vendor||'')} ${esc(d.model||'')} · ${esc(d.size)} · ${esc(d.disk_type)}</div>
+      </div>
+    </label>`).join('');
+}
+
+async function submitCreatePool() {
+  const alertEl = document.getElementById('create-pool-alert');
+  alertEl.classList.add('hidden');
+
+  const name = document.getElementById('cp-name').value.trim();
+  const devices = [...document.querySelectorAll('.cp-disk-cb:checked')].map(cb => cb.value);
+
+  if (!name) { alertEl.textContent = 'Pool name is required.'; alertEl.classList.remove('hidden'); return; }
+  if (!devices.length) { alertEl.textContent = 'Select at least one disk.'; alertEl.classList.remove('hidden'); return; }
+
+  const minDisks = {stripe:1, raidz1:3, raidz2:4};
+  if (devices.length < minDisks[window._cpLayout]) {
+    alertEl.textContent = `${window._cpLayout} requires at least ${minDisks[window._cpLayout]} disks.`;
+    alertEl.classList.remove('hidden'); return;
+  }
+
+  if (!confirm(`⚠ This will ERASE all data on: ${devices.join(', ')}\n\nCreate pool "${name}"?`)) return;
+
+  const btn = document.querySelector('#pool-content .btn-primary');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating pool…';
+  addActiveJob('pool-create', 'Creating ZFS pool…');
+
+  const resp = await fetch('/api/pool', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, layout: window._cpLayout, ashift: window._cpAshift,
+      compression: window._cpCompression, devices }),
+  });
+  removeActiveJob('pool-create');
+  const data = await resp.json();
+  if (!resp.ok) {
+    btn.disabled = false; btn.innerHTML = 'Create Pool';
+    alertEl.textContent = data.error || 'Failed to create pool.'; alertEl.classList.remove('hidden'); return;
+  }
+  await refreshPoolBar();
+  loadPool();
+}
+
+async function detectPools() {
+  const resp = await fetch('/api/pool/detect');
+  const pools = await resp.json();
+  if (!pools.length) { alert('No importable pools found.'); return; }
+
+  const names = pools.map(p => `${p.name} (${p.state})`).join('\n');
+  const choice = prompt(`Found pools:\n${names}\n\nEnter pool name to import:`);
+  if (!choice) return;
+
+  const r = await fetch('/api/pool/import', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name: choice.trim()}),
+  });
+  const d = await r.json();
+  if (r.ok) { await refreshPoolBar(); loadPool(); }
+  else alert(d.error || 'Import failed.');
+}
+
+// ===== Scrub =====
+async function _fetchScrubStatus() {
+  const body = document.getElementById('scrub-status-body');
+  const actions = document.getElementById('scrub-actions');
+  if (!body || !actions) return;
+  try {
+    const [sResp, schedResp] = await Promise.all([
+      fetch('/api/pool/scrub/status'),
+      fetch('/api/pool/scrub/schedule'),
+    ]);
+    if (!sResp.ok) return;
+    const s    = await sResp.json();
+    const sched = schedResp.ok ? await schedResp.json() : {};
+
+    const tog = document.getElementById('scrub-weekly-toggle');
+    if (tog) tog.checked = !!sched.weekly_scrub;
+
+    // Actions bar
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    if (isAdmin) {
+      if (s.state === 'running') {
+        actions.innerHTML = `<button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="stopScrub()">■ Stop Scrub</button>`;
+      } else {
+        actions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="startScrub()">▶ Start Scrub</button>`;
+      }
+    } else {
+      actions.innerHTML = '';
+    }
+
+    // Status body
+    let html = '';
+    if (s.state === 'running') {
+      const pct = (s.progress_pct || 0).toFixed(1);
+      html = `
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+            <span style="color:var(--accent-2);font-weight:600;">Scrub in progress…</span>
+            <span style="color:var(--text-2);">${pct}%</span>
+          </div>
+          <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:var(--accent-2);border-radius:3px;transition:width .5s;"></div>
+          </div>
+          ${s.time_left ? `<div class="text-3 text-xs" style="margin-top:6px;">Est. time remaining: ${esc(s.time_left)}</div>` : ''}
+          ${s.start_time ? `<div class="text-3 text-xs">Started: ${esc(s.start_time)}</div>` : ''}
+        </div>`;
+    } else if (s.state === 'finished') {
+      const errColor = s.errors > 0 ? 'var(--accent-danger)' : 'var(--accent-3)';
+      const errLabel = s.errors > 0 ? `${s.errors} error${s.errors!==1?'s':''}` : 'No errors';
+      html = `
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+          <div><div class="text-3 text-xs" style="margin-bottom:2px;">Last Result</div>
+            <div style="font-weight:600;color:${errColor};">${errLabel}</div></div>
+          ${s.duration ? `<div><div class="text-3 text-xs" style="margin-bottom:2px;">Duration</div><div style="font-weight:600;">${esc(s.duration)}</div></div>` : ''}
+          ${s.finish_time ? `<div><div class="text-3 text-xs" style="margin-bottom:2px;">Completed</div><div style="font-weight:600;font-size:13px;">${esc(s.finish_time)}</div></div>` : ''}
+        </div>`;
+    } else if (s.state === 'canceled') {
+      html = `<div style="color:var(--text-3);font-size:13px;">Last scrub was canceled${s.finish_time ? ' on ' + esc(s.finish_time) : ''}.</div>`;
+    } else {
+      html = `<div style="color:var(--text-3);font-size:13px;">No scrub has been run yet.</div>`;
+    }
+    body.innerHTML = html;
+  } catch { /* ignore */ }
+}
+
+async function startScrub() {
+  const resp = await fetch('/api/pool/scrub/start', { method: 'POST' });
+  const data = await resp.json();
+  if (!resp.ok) { alert(data.error || 'Failed to start scrub.'); return; }
+  _fetchScrubStatus();
+}
+
+async function stopScrub() {
+  if (!confirm('Stop the running scrub?')) return;
+  const resp = await fetch('/api/pool/scrub/stop', { method: 'POST' });
+  const data = await resp.json();
+  if (!resp.ok) { alert(data.error || 'Failed to stop scrub.'); return; }
+  _fetchScrubStatus();
+}
+
+async function setScrubSchedule(enabled) {
+  await fetch('/api/pool/scrub/schedule', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ weekly_scrub: enabled }),
+  });
+}
+
+// ===== Add Disks to Pool =====
+async function openAddDisksModal() {
+  document.getElementById('add-disks-alert').classList.add('hidden');
+  document.getElementById('modal-add-disks').classList.remove('hidden');
+  const listEl = document.getElementById('add-disks-list');
+  listEl.innerHTML = '<div style="padding:16px;color:var(--text-3);text-align:center;">Loading available disks…</div>';
+
+  // Fetch ZFS version and disk list in parallel.
+  try {
+    const [disksResp, verResp] = await Promise.all([
+      fetch('/api/disks'),
+      fetch('/api/pool/zfs-version'),
+    ]);
+    const disks = await disksResp.json() || [];
+    const ver   = verResp.ok ? await verResp.json() : null;
+
+    // Use the same logic as renderDisks to identify ZFS-assigned disks.
+    const stripPart = p => {
+      if (/\/nvme\d+n\d+p\d+$/.test(p)) return p.replace(/p\d+$/, '');
+      if (/\/sd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');
+      if (/\/hd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');
+      return p;
+    };
+    const poolDevices = new Set(
+      ((poolData && poolData.members) ? poolData.members : []).map(stripPart)
+    );
+    const isZfsDisk  = d => poolDevices.has(d.device) || poolDevices.has('/dev/' + d.name);
+    const hasIdentity = d => !!(d.vendor || d.model);
+
+    // Only show disks that are truly available (not in pool, not in use, have identity).
+    const available = disks.filter(d => !isZfsDisk(d) && !d.in_use && hasIdentity(d));
+
+    if (!available.length) {
+      listEl.innerHTML = '<div style="padding:16px;color:var(--text-3);text-align:center;">No available disks found.</div>';
+      return;
+    }
+    listEl.innerHTML = available.map(d => `
+      <label style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;">
+        <input type="checkbox" name="add-disk" value="${esc(d.device||('/dev/'+d.name))}" style="width:15px;height:15px;accent-color:var(--accent-2);">
+        <div style="flex:1;">
+          <div style="font-family:monospace;font-size:13px;font-weight:600;">${esc(d.device||('/dev/'+d.name))}</div>
+          <div style="font-size:12px;color:var(--text-3);">${esc(d.model||d.vendor||'Unknown')} — ${fmtBytes(d.size_bytes||0)}</div>
+        </div>
+      </label>`).join('');
+
+    // Show version warning if ZFS < 2.4.
+    const warnEl = document.getElementById('add-disks-version-warn');
+    if (ver && !ver.raidz_expand) {
+      warnEl.innerHTML = `
+        <span style="font-size:16px;">⚠</span>
+        <div>
+          <strong>ZFS ${esc(ver.version)} detected — RAIDZ expansion not supported.</strong><br>
+          Selected disk(s) will be added as a new stripe vdev and will <em>not</em> be protected
+          by your existing RAIDZ. To grow the actual RAIDZ, upgrade to
+          <strong>Ubuntu 26.04 LTS</strong> or later (which ships with ZFS 2.4+).
+        </div>`;
+      warnEl.style.display = 'flex';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  } catch(e) {
+    listEl.innerHTML = `<div style="padding:16px;color:var(--accent-danger);">Failed to load disks: ${esc(e.message)}</div>`;
+  }
+}
+
+function closeAddDisksModal() {
+  document.getElementById('modal-add-disks').classList.add('hidden');
+}
+
+async function submitAddDisks() {
+  const checked = [...document.querySelectorAll('input[name="add-disk"]:checked')].map(c => c.value);
+  if (!checked.length) { alert('Select at least one disk.'); return; }
+
+  const alertEl = document.getElementById('add-disks-alert');
+  const btn = document.getElementById('btn-add-disks-submit');
+  alertEl.classList.add('hidden');
+  btn.disabled = true; btn.textContent = 'Adding…';
+
+  const resp = await fetch('/api/pool/grow', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ devices: checked }),
+  });
+  const data = await resp.json();
+  btn.disabled = false; btn.textContent = 'Add to Pool';
+
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to add disks.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  closeAddDisksModal();
+  await refreshPoolBar();
+  loadPool();
+}
+
+// ===== Destroy Pool =====
+function openDestroyPoolModal() {
+  document.getElementById('destroy-pool-alert').classList.add('hidden');
+  document.getElementById('destroy-pool-confirm-input').value = '';
+  document.getElementById('destroy-pool-confirm-input').placeholder = poolData ? poolData.name : '';
+  checkDestroyConfirm();
+  document.getElementById('modal-destroy-pool').classList.remove('hidden');
+  setTimeout(() => document.getElementById('destroy-pool-confirm-input').focus(), 50);
+}
+
+function closeDestroyPoolModal() {
+  document.getElementById('modal-destroy-pool').classList.add('hidden');
+}
+
+function checkDestroyConfirm() {
+  const val = document.getElementById('destroy-pool-confirm-input').value;
+  const match = poolData && val === poolData.name;
+  const btn = document.getElementById('btn-destroy-pool-confirm');
+  btn.disabled = !match;
+  btn.style.opacity = match ? '1' : '.4';
+  btn.style.cursor  = match ? 'pointer' : 'not-allowed';
+}
+
+async function submitDestroyPool() {
+  const btn = document.getElementById('btn-destroy-pool-confirm');
+  const alertEl = document.getElementById('destroy-pool-alert');
+  if (!poolData) return;
+  btn.disabled = true; btn.textContent = 'Destroying…';
+  alertEl.classList.add('hidden');
+
+  const resp = await fetch('/api/pool/destroy', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: poolData.name }),
+  });
+  const data = await resp.json();
+
+  if (!resp.ok) {
+    btn.disabled = false; btn.textContent = 'Destroy';
+    checkDestroyConfirm();
+    alertEl.textContent = data.error || 'Failed to destroy pool.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  closeDestroyPoolModal();
+  await refreshPoolBar();
+  loadPool();
+}
+
+// ===== Datasets =====
+let datasetCache = [];
+
+async function loadDatasets() {
+  const el = document.getElementById('datasets-content');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
+  await refreshPoolBar();
+
+  if (!poolData) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📁</div><h3>No pool configured</h3><p>Create a ZFS pool first.</p></div>';
+    return;
+  }
+
+  try {
+    const resp = await fetch('/api/datasets');
+    datasetCache = await resp.json() || [];
+  } catch { datasetCache = []; }
+
+  renderDatasets(el);
+}
+
+function renderDatasets(el) {
+  if (!datasetCache.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📁</div><h3>No datasets yet</h3><p>Create your first dataset to get started.</p></div>';
+    return;
+  }
+
+  const rows = datasetCache.map(d => {
+    const indent = d.depth * 24;
+    const isRoot = d.depth === 0;
+    return `
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;padding-left:${indent}px;">
+            <span style="opacity:.5;font-size:13px;">${isRoot ? '🗄' : '📁'}</span>
+            <div>
+              <div style="font-weight:600;">${esc(d.short_name)}</div>
+              ${d.depth>0 ? `<div class="text-3 text-xs">${esc(d.name)}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td style="font-family:monospace;font-size:13px;">${fmtBytes(d.used)}</td>
+        <td style="font-family:monospace;font-size:13px;">${d.quota > 0 ? fmtBytes(d.quota) : 'none'}</td>
+        <td style="font-size:13px;">${esc(d.compression)} <span class="text-3">${esc(d.compress_ratio)}</span></td>
+        <td>
+          ${!isRoot && currentUser.role==='admin' ? `
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" onclick="openCreateSnapshot('${esc(d.name)}')">📸</button>
+              <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}','${esc(d.quota_str)}','${esc(d.compression)}')">Edit</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteDataset('${esc(d.name)}')">Delete</button>
+            </div>` : ''}
+        </td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Dataset</th><th>Used</th><th>Quota</th><th>Compression</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function openCreateDataset() {
+  document.getElementById('modal-create-dataset').classList.remove('hidden');
+  document.getElementById('cds-parent').innerHTML =
+    (datasetCache || []).map(d => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+  document.getElementById('cds-alert').classList.add('hidden');
+  document.getElementById('cds-name').value = '';
+}
+function closeCreateDataset() { document.getElementById('modal-create-dataset').classList.add('hidden'); }
+
+async function submitCreateDataset(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('cds-alert');
+  alertEl.classList.add('hidden');
+
+  const parent = document.getElementById('cds-parent').value;
+  const name   = document.getElementById('cds-name').value.trim();
+  const amount = parseFloat(document.getElementById('cds-quota-amount').value) || 0;
+  const unit   = document.getElementById('cds-quota-unit').value;
+  const qtype  = document.getElementById('cds-quota-type').value;
+  const comp   = document.getElementById('cds-compression').value;
+
+  if (!name) { alertEl.textContent = 'Dataset name is required.'; alertEl.classList.remove('hidden'); return; }
+
+  const fullName   = parent + '/' + name;
+  const quotaBytes = amount > 0 ? Math.round(amount * {'MB':1024**2,'GB':1024**3,'TB':1024**4}[unit]) : 0;
+
+  const btn = document.querySelector('#modal-create-dataset button[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+
+  closeCreateDataset();
+  addActiveJob('dataset-create-' + fullName, `Creating dataset ${fullName}…`);
+
+  const resp = await fetch('/api/datasets', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name: fullName, quota: quotaBytes, quota_type: qtype, compression: comp}),
+  });
+  const data = await resp.json();
+  removeActiveJob('dataset-create-' + fullName);
+  btn.disabled = false;
+  btn.innerHTML = 'Create';
+
+  if (!resp.ok) {
+    // Re-open modal and show error.
+    document.getElementById('modal-create-dataset').classList.remove('hidden');
+    alertEl.textContent = data.error || 'Failed to create dataset.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  await refreshPoolBar();
+  loadDatasets();
+}
+
+async function deleteDataset(name) {
+  if (!confirm(`Delete dataset "${name}"?\n\nThis will fail if it has children or snapshots.`)) return;
+  const resp = await fetch('/api/datasets/' + encodeURIComponent(name), {method:'DELETE'});
+  const data = await resp.json();
+  if (resp.ok) { await refreshPoolBar(); loadDatasets(); }
+  else alert(data.error || 'Failed to delete dataset.');
+}
+
+function openEditDataset(name, quotaStr, comp) {
+  document.getElementById('modal-edit-dataset').classList.remove('hidden');
+  document.getElementById('eds-name').textContent = name;
+  document.getElementById('eds-name').dataset.name = name;
+  document.getElementById('eds-compression').value = comp;
+  document.getElementById('eds-alert').classList.add('hidden');
+}
+function closeEditDataset() { document.getElementById('modal-edit-dataset').classList.add('hidden'); }
+
+async function submitEditDataset(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('eds-alert');
+  alertEl.classList.add('hidden');
+  const name    = document.getElementById('eds-name').dataset.name;
+  const amount  = parseFloat(document.getElementById('eds-quota-amount').value) || 0;
+  const unit    = document.getElementById('eds-quota-unit').value;
+  const qtype   = document.getElementById('eds-quota-type').value;
+  const comp    = document.getElementById('eds-compression').value;
+  const quotaBytes = amount > 0 ? Math.round(amount * {'MB':1024**2,'GB':1024**3,'TB':1024**4}[unit]) : 0;
+
+  const resp = await fetch('/api/datasets/' + encodeURIComponent(name), {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({quota: quotaBytes, quota_type: qtype, compression: comp}),
+  });
+  const data = await resp.json();
+  if (!resp.ok) { alertEl.textContent = data.error || 'Failed.'; alertEl.classList.remove('hidden'); return; }
+  closeEditDataset();
+  await refreshPoolBar();
+  loadDatasets();
+}
+
+// ===== Snapshot Schedules =====
+let _schedCache = [];
+let schedEditId = null;
+
+async function loadSchedules() {
+  const el = document.getElementById('schedules-content');
+  try {
+    const resp = await fetch('/api/snapshot-schedules');
+    const data = await resp.json() || [];
+    _schedCache = data;
+    renderSchedules(el, data);
+  } catch {
+    el.innerHTML = '<div style="color:var(--accent-danger);font-size:13px;">Failed to load schedules.</div>';
+  }
+  if (currentUser && currentUser.role !== 'admin') {
+    const btn = document.getElementById('btn-create-schedule');
+    if (btn) btn.style.display = 'none';
+  }
+}
+
+function renderSchedules(el, policies) {
+  if (!policies.length) {
+    el.innerHTML = '<div style="color:var(--text-3);font-size:13px;">No schedules configured. Add a policy to automate snapshot creation.</div>';
+    return;
+  }
+  const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const rows = policies.map((p, i) => {
+    const freq = schedFreqLabel(p);
+    const next = p.next_run ? formatDate(p.next_run) : '—';
+    const last = p.last_run && p.last_run !== '0001-01-01T00:00:00Z' ? formatDate(p.last_run) : '—';
+    const status = p.last_status === 'error'
+      ? `<span style="color:var(--accent-danger);" title="${esc(p.last_error||'')}">✗ Error</span>`
+      : p.last_status === 'ok' ? '<span style="color:var(--accent-3);">✓ OK</span>' : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px;">${esc(p.dataset)}</td>
+      <td><span class="badge badge-readonly">${esc(p.label||'auto')}</span></td>
+      <td style="font-size:13px;">${freq}</td>
+      <td style="font-size:13px;">${p.retention}</td>
+      <td style="font-size:12px;color:var(--text-2);">${last}</td>
+      <td style="font-size:12px;color:var(--text-2);">${next}</td>
+      <td>${status}</td>
+      <td>${p.enabled ? '<span style="color:var(--accent-3);">On</span>' : '<span style="color:var(--text-3);">Off</span>'}</td>
+      <td>${currentUser.role==='admin' ? `
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-ghost btn-sm" onclick="runScheduleNow('${esc(p.id)}')">▶ Now</button>
+          <button class="btn btn-ghost btn-sm" onclick="openEditSchedule(${i})">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteSchedule('${esc(p.id)}')">Delete</button>
+        </div>` : ''}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Dataset</th><th>Label</th><th>Frequency</th><th>Keep</th>
+      <th>Last Run</th><th>Next Run</th><th>Status</th><th>Enabled</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function schedFreqLabel(p) {
+  const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const pad = n => String(n).padStart(2,'0');
+  switch (p.frequency) {
+    case 'hourly':  return `Hourly at :${pad(p.minute)}`;
+    case 'daily':   return `Daily at ${pad(p.hour)}:${pad(p.minute)}`;
+    case 'weekly':  return `Weekly ${weekdays[p.weekday||0]} ${pad(p.hour)}:${pad(p.minute)}`;
+    case 'monthly': return `Monthly day ${p.day_of_month||1} ${pad(p.hour)}:${pad(p.minute)}`;
+    default: return p.frequency;
+  }
+}
+
+async function openCreateSchedule() {
+  schedEditId = null;
+  document.getElementById('sched-modal-title').textContent = 'New Snapshot Policy';
+  document.getElementById('sched-submit-btn').textContent  = 'Create Policy';
+  document.getElementById('sched-label').value      = 'auto';
+  document.getElementById('sched-freq').value       = 'daily';
+  document.getElementById('sched-retention').value  = '7';
+  document.getElementById('sched-hour').value       = '2';
+  document.getElementById('sched-minute').value     = '0';
+  document.getElementById('sched-weekday').value    = '0';
+  document.getElementById('sched-dom').value        = '1';
+  document.getElementById('sched-enabled').checked  = true;
+  document.getElementById('sched-alert').classList.add('hidden');
+  await loadSchedDatasets('');
+  updateSchedFields();
+  document.getElementById('modal-schedule').classList.remove('hidden');
+}
+
+function openEditSchedule(i) {
+  const p = _schedCache[i];
+  if (!p) return;
+  schedEditId = p.id;
+  document.getElementById('sched-modal-title').textContent = 'Edit Snapshot Policy';
+  document.getElementById('sched-submit-btn').textContent  = 'Save Changes';
+  document.getElementById('sched-label').value      = p.label || 'auto';
+  document.getElementById('sched-freq').value       = p.frequency || 'daily';
+  document.getElementById('sched-retention').value  = p.retention || 7;
+  document.getElementById('sched-hour').value       = p.hour ?? 2;
+  document.getElementById('sched-minute').value     = p.minute ?? 0;
+  document.getElementById('sched-weekday').value    = p.weekday ?? 0;
+  document.getElementById('sched-dom').value        = p.day_of_month ?? 1;
+  document.getElementById('sched-enabled').checked  = !!p.enabled;
+  document.getElementById('sched-alert').classList.add('hidden');
+  loadSchedDatasets(p.dataset);
+  updateSchedFields();
+  document.getElementById('modal-schedule').classList.remove('hidden');
+}
+
+async function loadSchedDatasets(selected) {
+  const sel = document.getElementById('sched-dataset');
+  try {
+    const resp = await fetch('/api/datasets');
+    const datasets = await resp.json() || [];
+    const ds = datasets.filter(d => d.depth > 0);
+    sel.innerHTML = ds.map(d =>
+      `<option value="${esc(d.name)}"${d.name===selected?' selected':''}>${esc(d.name)}</option>`
+    ).join('');
+    if (!sel.innerHTML) sel.innerHTML = '<option value="">No datasets available</option>';
+  } catch {
+    sel.innerHTML = '<option value="">Failed to load datasets</option>';
+  }
+}
+
+function updateSchedFields() {
+  const freq = document.getElementById('sched-freq').value;
+  document.getElementById('sched-weekday-group').style.display = freq === 'weekly'  ? '' : 'none';
+  document.getElementById('sched-dom-group').style.display     = freq === 'monthly' ? '' : 'none';
+  document.getElementById('sched-hour-group').style.display    = freq === 'hourly'  ? 'none' : '';
+}
+
+function closeScheduleModal() {
+  document.getElementById('modal-schedule').classList.add('hidden');
+  schedEditId = null;
+}
+
+async function submitSchedule(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('sched-alert');
+  alertEl.classList.add('hidden');
+  const body = {
+    dataset:      document.getElementById('sched-dataset').value,
+    label:        document.getElementById('sched-label').value.trim() || 'auto',
+    frequency:    document.getElementById('sched-freq').value,
+    hour:         parseInt(document.getElementById('sched-hour').value) || 0,
+    minute:       parseInt(document.getElementById('sched-minute').value) || 0,
+    weekday:      parseInt(document.getElementById('sched-weekday').value) || 0,
+    day_of_month: parseInt(document.getElementById('sched-dom').value) || 1,
+    retention:    parseInt(document.getElementById('sched-retention').value) || 7,
+    enabled:      document.getElementById('sched-enabled').checked,
+  };
+  if (!body.dataset) {
+    alertEl.textContent = 'Dataset is required.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  const url    = schedEditId ? `/api/snapshot-schedules/${schedEditId}` : '/api/snapshot-schedules';
+  const method = schedEditId ? 'PUT' : 'POST';
+  const resp = await fetch(url, {
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to save policy.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  closeScheduleModal();
+  loadSchedules();
+}
+
+async function runScheduleNow(id) {
+  const resp = await fetch(`/api/snapshot-schedules/${id}/run-now`, { method: 'POST' });
+  const data = await resp.json();
+  if (!resp.ok) { alert(data.error || 'Run failed.'); return; }
+  loadSchedules();
+  loadSnapshots();
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Delete this snapshot policy?')) return;
+  const resp = await fetch(`/api/snapshot-schedules/${id}`, { method: 'DELETE' });
+  if (!resp.ok) { const d = await resp.json(); alert(d.error || 'Delete failed.'); return; }
+  loadSchedules();
+}
+
+// ===== Snapshots =====
+async function loadSnapshots() {
+  const el = document.getElementById('snapshots-content');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
+
+  if (!poolData) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📸</div><h3>No pool configured</h3></div>';
+    return;
+  }
+  try {
+    const resp  = await fetch('/api/snapshots');
+    const snaps = await resp.json() || [];
+    renderSnapshots(el, snaps);
+  } catch {
+    el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load snapshots.</div>';
+  }
+}
+
+function renderSnapshots(el, snaps) {
+  if (!snaps.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📸</div><h3>No snapshots yet</h3><p>Click 📸 on a dataset to create one.</p></div>';
+    return;
+  }
+
+  // Group by dataset.
+  const grouped = {};
+  snaps.forEach(s => {
+    if (!grouped[s.dataset]) grouped[s.dataset] = [];
+    grouped[s.dataset].push(s);
+  });
+
+  el.innerHTML = Object.entries(grouped).map(([dataset, list]) => `
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:2px solid var(--border);margin-bottom:8px;">
+        <span style="opacity:.6;">📁</span>
+        <span style="font-weight:700;font-size:15px;">${esc(dataset)}</span>
+        <span class="badge badge-readonly" style="margin-left:4px;">${list.length} snapshot${list.length!==1?'s':''}</span>
+        ${currentUser.role==='admin' ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openCreateSnapshot('${esc(dataset)}')">+ Snapshot</button>` : ''}
+      </div>
+      ${list.slice().reverse().map(s => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0 10px 24px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-1);flex-shrink:0;margin-right:4px;"></div>
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:14px;">${esc(s.snap_name)}</div>
+            <div class="text-3 text-xs">${formatDate(s.creation)} · Used: ${fmtBytes(s.used)} · Refer: ${fmtBytes(s.refer)}</div>
+          </div>
+          ${currentUser.role==='admin' ? `
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn btn-ghost btn-sm" onclick="restoreSnapshot('${esc(s.name)}','${esc(s.dataset)}')">Restore</button>
+              <button class="btn btn-ghost btn-sm" onclick="cloneSnapshot('${esc(s.name)}')">Clone</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteSnapshot('${esc(s.name)}')">Delete</button>
+            </div>` : ''}
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+function openCreateSnapshot(dataset) {
+  document.getElementById('snap-dataset').value = dataset;
+  document.getElementById('snap-label').value   = '';
+  document.getElementById('modal-snapshot').classList.remove('hidden');
+  document.getElementById('snap-label').focus();
+}
+function closeSnapshotModal() { document.getElementById('modal-snapshot').classList.add('hidden'); }
+
+async function submitCreateSnapshot(e) {
+  e.preventDefault();
+  const dataset = document.getElementById('snap-dataset').value;
+  const label   = document.getElementById('snap-label').value.trim() || 'snap';
+  const resp = await fetch('/api/snapshots', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({dataset, label}),
+  });
+  const data = await resp.json();
+  closeSnapshotModal();
+  if (!resp.ok) { alert(data.error || 'Snapshot failed.'); return; }
+  loadSnapshots();
+}
+
+async function restoreSnapshot(name, dataset) {
+  if (!confirm(`Restore "${dataset}" to snapshot:\n${name}\n\n⚠ All changes since this snapshot will be lost.`)) return;
+  const resp = await fetch('/api/snapshots/restore', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name}),
+  });
+  const data = await resp.json();
+  if (resp.ok) loadSnapshots(); else alert(data.error || 'Restore failed.');
+}
+
+async function cloneSnapshot(name) {
+  const target = prompt(`Clone "${name}" to new dataset:\n(enter full ZFS path, e.g. tank/clone)`);
+  if (!target) return;
+  const resp = await fetch('/api/snapshots/clone', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name, target: target.trim()}),
+  });
+  const data = await resp.json();
+  if (resp.ok) { loadSnapshots(); loadDatasets(); }
+  else alert(data.error || 'Clone failed.');
+}
+
+async function deleteSnapshot(name) {
+  if (!confirm(`Delete snapshot:\n${name}`)) return;
+  const resp = await fetch('/api/snapshots/delete', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({name}),
+  });
+  const data = await resp.json();
+  if (resp.ok) loadSnapshots(); else alert(data.error || 'Delete failed.');
+}
+
+function openDatasetDetail(name) {
+  const d = (datasetData || []).find(x => x.name === name);
+  if (!d) return;
+  alert(`${d.name}\n\nUsed: ${fmtBytes(d.used)}\nAvailable: ${fmtBytes(d.avail)}\nQuota: ${d.quota > 0 ? fmtBytes(d.quota) : 'none'}\nCompression: ${d.compression}\nRatio: ${d.compress_ratio}`);
+}
+
+// ===== Disks =====
+async function loadDisks() {
+  const el = document.getElementById('disks-content');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading disk info…</div>';
+  try {
+    // Ensure pool data is current so we can cross-reference pool members.
+    if (!poolData) await refreshPoolBar();
+    const resp  = await fetch('/api/disks');
+    const disks = await resp.json();
+    renderDisks(el, disks || []);
+  } catch {
+    el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load disk info.</div>';
+  }
+}
+
+async function refreshDisks() {
+  const btn = document.getElementById('btn-refresh-disks');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Refreshing SMART…';
+  addActiveJob('smart-refresh', 'Refreshing SMART data…');
+  try {
+    const resp  = await fetch('/api/disks/refresh', { method: 'POST' });
+    const disks = await resp.json();
+    renderDisks(document.getElementById('disks-content'), disks || []);
+  } catch {
+    alert('SMART refresh failed.');
+  }
+  removeActiveJob('smart-refresh');
+  btn.disabled = false;
+  btn.innerHTML = '↻ Refresh SMART';
+}
+
+async function scanDisks() {
+  const btn = document.getElementById('btn-scan-disks');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Scanning…';
+  addActiveJob('disk-scan', 'Scanning for new disks…');
+  try {
+    const resp  = await fetch('/api/disks/scan', { method: 'POST' });
+    const disks = await resp.json();
+    renderDisks(document.getElementById('disks-content'), disks || []);
+  } catch {
+    alert('Disk scan failed.');
+  }
+  removeActiveJob('disk-scan');
+  btn.disabled = false;
+  btn.innerHTML = '⬡ Scan for Disks';
+}
+
+function renderDisks(el, disks) {
+  if (!disks.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">💿</div>
+        <h3>No disks detected</h3>
+        <p>No physical disks found on this system.</p>
+      </div>`;
+    return;
+  }
+
+  // Build a set of disk devices belonging to the current ZFS pool.
+  // Strip partition suffixes to match lsblk disk names:
+  //   /dev/sdb1   → /dev/sdb   (SATA/SAS)
+  //   /dev/nvme0n1p1 → /dev/nvme0n1  (NVMe partition)
+  //   /dev/nvme0n1   → /dev/nvme0n1  (NVMe disk — no change)
+  const stripPart = p => {
+    if (/\/nvme\d+n\d+p\d+$/.test(p)) return p.replace(/p\d+$/, ''); // NVMe partition
+    if (/\/sd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');  // SATA/SAS partition
+    if (/\/hd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');  // IDE partition
+    return p;
+  };
+  const poolDevices = new Set(
+    ((poolData && poolData.members) ? poolData.members : []).map(stripPart)
+  );
+  const poolName = poolData ? poolData.name : '';
+  const isZfsDisk = d => poolDevices.has(d.device) || poolDevices.has('/dev/' + d.name);
+
+  // Disks without vendor+model are likely virtual/OS block devices.
+  const hasIdentity = d => !!(d.vendor || d.model);
+
+  const zfsAssigned = disks.filter(d => isZfsDisk(d));
+  const available   = disks.filter(d => !isZfsDisk(d) && !d.in_use && hasIdentity(d));
+  const inUse       = disks.filter(d => !isZfsDisk(d) && (d.in_use || !hasIdentity(d)));
+
+  let html = '';
+
+  if (available.length) {
+    html += `<h3 style="margin-bottom:12px;color:var(--text-2);">Available for ZFS (${available.length})</h3>`;
+    html += '<div class="table-wrap" style="margin-bottom:28px;"><table>';
+    html += diskTableHeader();
+    html += '<tbody>' + available.map(d => diskRow(d, false)).join('') + '</tbody></table></div>';
+  } else if (!zfsAssigned.length) {
+    html += `<div style="color:var(--text-3);font-size:14px;margin-bottom:24px;">No disks available for ZFS pool creation.</div>`;
+  }
+
+  if (zfsAssigned.length) {
+    html += `<h3 style="margin-bottom:12px;color:var(--accent-2);">ZFS Assigned Disks (${zfsAssigned.length})</h3>`;
+    html += '<div class="table-wrap" style="margin-bottom:28px;"><table>';
+    html += diskTableHeaderWithPool();
+    html += '<tbody>' + zfsAssigned.map(d => diskRowWithPool(d, poolName)).join('') + '</tbody></table></div>';
+  }
+
+  if (inUse.length) {
+    html += `<h3 style="margin-bottom:12px;color:var(--text-3);">In Use / System (${inUse.length})</h3>`;
+    html += '<div class="table-wrap"><table>';
+    html += diskTableHeader();
+    html += '<tbody>' + inUse.map(d => diskRow(d, true)).join('') + '</tbody></table></div>';
+  }
+
+  // Show cache timestamp.
+  const ts = disks.find(d => d.updated_at && d.updated_at !== '0001-01-01T00:00:00Z');
+  if (ts) {
+    html += `<div class="text-3 text-sm" style="margin-top:16px;">SMART data last refreshed: ${formatDate(ts.updated_at)}</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function diskTableHeader() {
+  return `<thead><tr>
+    <th>Device</th><th>Vendor / Model</th><th>Size</th>
+    <th>Type</th><th>Wearout</th><th>SMART</th>
+  </tr></thead>`;
+}
+
+function diskTableHeaderWithPool() {
+  return `<thead><tr>
+    <th>Device</th><th>Vendor / Model</th><th>Size</th>
+    <th>Type</th><th>Wearout</th><th>SMART</th><th>Pool</th>
+  </tr></thead>`;
+}
+
+function diskRow(d, dimmed) {
+  const tc  = dimmed ? 'color:var(--text-3);' : 'color:var(--text);';
+  const tc2 = dimmed ? 'color:var(--text-3);' : 'color:var(--text-2);';
+  return `<tr>
+    <td style="font-family:monospace;font-size:13px;${tc}">${esc(d.device)}</td>
+    <td>
+      <div style="font-weight:600;${tc}">${esc(d.vendor||'—')} ${esc(d.model||'—')}</div>
+      ${d.serial ? `<div style="font-size:11px;${tc2}">${esc(d.serial)}</div>` : ''}
+    </td>
+    <td style="font-family:monospace;${tc}">${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)}</td>
+    <td>${diskTypeBadge(d.disk_type, dimmed)}</td>
+    <td>${wearoutBar(d, dimmed)}</td>
+    <td>${smartBadge(d)}</td>
+  </tr>`;
+}
+
+function diskRowWithPool(d, poolName) {
+  return `<tr>
+    <td style="font-family:monospace;font-size:13px;">${esc(d.device)}</td>
+    <td>
+      <div style="font-weight:600;">${esc(d.vendor||'—')} ${esc(d.model||'—')}</div>
+      ${d.serial ? `<div style="font-size:11px;color:var(--text-2);">${esc(d.serial)}</div>` : ''}
+    </td>
+    <td style="font-family:monospace;">${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)}</td>
+    <td>${diskTypeBadge(d.disk_type, false)}</td>
+    <td>${wearoutBar(d, false)}</td>
+    <td>${smartBadge(d)}</td>
+    <td><span style="font-family:monospace;font-size:12px;font-weight:600;color:var(--accent-2);">🗄 ${esc(poolName)}</span></td>
+  </tr>`;
+}
+
+function diskTypeBadge(t, dimmed) {
+  const color = dimmed ? 'var(--text-3)'
+    : t==='NVMe' ? 'var(--accent-1)' : t==='SSD' ? 'var(--accent-2)' : 'var(--text-2)';
+  return `<span style="font-size:12px;font-weight:700;color:${color};">${esc(t||'—')}</span>`;
+}
+
+function wearoutBar(d, dimmed) {
+  if (d.wearout_pct === null || d.wearout_pct === undefined) {
+    return `<span style="font-size:12px;color:var(--text-3);">N/A</span>`;
+  }
+  const pct = d.wearout_pct;
+  const color = dimmed ? 'var(--text-3)'
+    : pct < 50 ? 'var(--accent-3)' : pct < 80 ? 'var(--accent-warn)' : 'var(--accent-danger)';
+  return `
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:64px;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;"></div>
+      </div>
+      <span style="font-size:12px;font-weight:600;color:${color};">${pct}%</span>
+    </div>`;
+}
+
+function smartBadge(d) {
+  if (!d.smart_msg) return '<span class="text-3" style="font-size:12px;">—</span>';
+  if (d.smart_msg === 'Not supported') {
+    return `<span class="text-3" style="font-size:12px;">Not supported</span>`;
+  }
+  return `<span class="badge badge-${d.smart_ok?'ok':'error'}">${esc(d.smart_msg)}</span>`;
+}
+
+// ===== SMB Shares =====
+let shareEditName = null; // null = create mode, string = edit mode
+
+async function loadShares() {
+  const el = document.getElementById('shares-content');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
+
+  // Show Samba status banner.
+  try {
+    const sr = await fetch('/api/shares/status');
+    const ss = await sr.json();
+    const banner = document.getElementById('smb-status-banner');
+    if (!ss.installed) {
+      banner.className = 'banner banner-warn';
+      banner.innerHTML = `⚠ Samba is not installed. Install it via <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="showPage('prereqs')">Prerequisites</button>`;
+    } else {
+      const isActive = ss.status === 'active';
+      banner.className = isActive ? 'banner banner-ok' : 'banner banner-danger';
+      const svcBtns = currentUser && currentUser.role === 'admin'
+        ? `<span style="margin-left:auto;display:flex;gap:6px;">
+             <button class="btn btn-ghost btn-sm" onclick="controlSMB('start')">Start</button>
+             <button class="btn btn-ghost btn-sm" onclick="controlSMB('stop')">Stop</button>
+             <button class="btn btn-ghost btn-sm" onclick="controlSMB('restart')">Restart</button>
+           </span>` : '';
+      if (isActive) {
+        banner.innerHTML = `✓ Samba is running${svcBtns}`;
+      } else {
+        banner.innerHTML = `✗ smbd is <strong>${esc(ss.status)}</strong> — shares won't be accessible until it's running.${svcBtns}`;
+      }
+    }
+    const btn = document.getElementById('btn-create-share');
+    if (btn && currentUser && currentUser.role !== 'admin') btn.style.display = 'none';
+  } catch {}
+
+  try {
+    const resp = await fetch('/api/shares');
+    const shares = await resp.json() || [];
+    renderShares(el, shares);
+  } catch {
+    el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load shares.</div>';
+  }
+}
+
+let _sharesCache = [];
+
+function renderShares(el, shares) {
+  _sharesCache = shares;
+  if (!shares.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🔗</div>
+        <h3>No shares configured</h3>
+        <p>Create a share to make ZFS datasets accessible over the network.</p>
+      </div>`;
+    return;
+  }
+
+  const rows = shares.map((s, i) => `
+    <tr>
+      <td style="font-weight:600;">${esc(s.name)}</td>
+      <td style="font-family:monospace;font-size:12px;">${esc(s.path)}</td>
+      <td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>
+      <td>
+        ${s.read_only
+          ? '<span class="badge badge-readonly">Read-only</span>'
+          : '<span class="badge badge-ok">Read/Write</span>'}
+      </td>
+      <td class="text-2" style="font-size:13px;">
+        ${s.guest_ok ? '<span style="color:var(--accent-warn);">Guest OK</span>' : ''}
+        ${(s.valid_users&&s.valid_users.length) ? esc(s.valid_users.join(', ')) : (s.guest_ok ? '' : 'All users')}
+      </td>
+      <td>
+        ${currentUser.role==='admin' ? `
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="openEditShareByIdx(${i})">Edit</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteShareByIdx(${i})">Delete</button>
+          </div>` : ''}
+      </td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Share Name</th><th>Path</th><th>Comment</th>
+          <th>Access</th><th>Users</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="text-3 text-sm" style="margin-top:12px;">
+      Connect from Windows: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px;">\\\\&lt;server-ip&gt;\\&lt;share-name&gt;</code>
+    </div>`;
+}
+
+async function openCreateShare() {
+  shareEditName = null;
+  document.getElementById('share-modal-title').textContent = 'New Share';
+  document.getElementById('share-submit-btn').textContent = 'Create Share';
+  document.getElementById('share-name').value = '';
+  document.getElementById('share-name').disabled = false;
+  document.getElementById('share-path').value = '';
+  document.getElementById('share-path-select').value = '';
+  document.getElementById('share-comment').value = '';
+  document.getElementById('share-browseable').checked = true;
+  document.getElementById('share-readonly').checked = false;
+  document.getElementById('share-guestok').checked = false;
+  document.getElementById('share-alert').classList.add('hidden');
+  await loadShareFormData([]);
+  document.getElementById('modal-share').classList.remove('hidden');
+  document.getElementById('share-name').focus();
+}
+
+function openEditShareByIdx(i) {
+  const s = _sharesCache[i];
+  if (!s) return;
+  _openEditShareObj(s);
+}
+function deleteShareByIdx(i) {
+  const s = _sharesCache[i];
+  if (!s) return;
+  deleteShare(s.name);
+}
+
+async function openEditShare(name) {
+  const resp = await fetch('/api/shares');
+  const shares = await resp.json() || [];
+  const s = shares.find(x => x.name === name);
+  if (!s) return;
+  _openEditShareObj(s);
+}
+
+async function _openEditShareObj(s) {
+  shareEditName = s.name;
+  document.getElementById('share-modal-title').textContent = 'Edit Share';
+  document.getElementById('share-submit-btn').textContent = 'Save Changes';
+  document.getElementById('share-name').value = s.name;
+  document.getElementById('share-name').disabled = true;
+  document.getElementById('share-path').value = s.path;
+  document.getElementById('share-path-select').value = '';
+  document.getElementById('share-comment').value = s.comment || '';
+  document.getElementById('share-browseable').checked = !!s.browseable;
+  document.getElementById('share-readonly').checked = !!s.read_only;
+  document.getElementById('share-guestok').checked = !!s.guest_ok;
+  document.getElementById('share-alert').classList.add('hidden');
+  await loadShareFormData(s.valid_users || []);
+  document.getElementById('modal-share').classList.remove('hidden');
+}
+
+async function loadShareFormData(selectedUsers) {
+  // Populate dataset path dropdown.
+  const pathSel = document.getElementById('share-path-select');
+  try {
+    const resp = await fetch('/api/datasets');
+    const datasets = await resp.json() || [];
+    const mountable = datasets.filter(d => d.depth > 0 && d.mountpoint && d.mountpoint !== 'none' && d.mountpoint !== '-');
+    pathSel.innerHTML = '<option value="">— Select a ZFS dataset —</option>' +
+      mountable.map(d => `<option value="${esc(d.mountpoint)}">${esc(d.name)} → ${esc(d.mountpoint)}</option>`).join('');
+  } catch {
+    pathSel.innerHTML = '<option value="">— failed to load datasets —</option>';
+  }
+
+  // Populate users checklist.
+  const listEl = document.getElementById('share-users-list');
+  try {
+    const resp = await fetch('/api/users');
+    const users = (await resp.json() || []).filter(u => u.role !== 'smb-only' || true);
+    if (!users.length) {
+      listEl.innerHTML = '<div style="padding:12px;color:var(--text-3);font-size:13px;">No users found.</div>';
+      return;
+    }
+    listEl.innerHTML = users.map(u => `
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px;">
+        <input type="checkbox" name="share-user" value="${esc(u.username)}"
+          ${(selectedUsers||[]).includes(u.username) ? 'checked' : ''}
+          style="width:15px;height:15px;accent-color:var(--accent-2);">
+        <div>
+          <div style="font-weight:600;">${esc(u.username)}</div>
+          <div class="text-3 text-xs">${esc(u.role)}</div>
+        </div>
+      </label>`).join('');
+  } catch {
+    listEl.innerHTML = '<div style="padding:12px;color:var(--accent-danger);font-size:13px;">Failed to load users.</div>';
+  }
+}
+
+function sharePathSelect(val) {
+  if (val) document.getElementById('share-path').value = val;
+}
+
+function closeShareModal() {
+  document.getElementById('modal-share').classList.add('hidden');
+  shareEditName = null;
+}
+
+async function submitShare(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('share-alert');
+  alertEl.classList.add('hidden');
+
+  const name     = document.getElementById('share-name').value.trim();
+  const path     = document.getElementById('share-path').value.trim();
+  const comment  = document.getElementById('share-comment').value.trim();
+  const browseable = document.getElementById('share-browseable').checked;
+  const readOnly   = document.getElementById('share-readonly').checked;
+  const guestOK    = document.getElementById('share-guestok').checked;
+  const validUsers = [...document.querySelectorAll('input[name="share-user"]:checked')].map(cb => cb.value);
+
+  const body = { name, path, comment, browseable, read_only: readOnly, guest_ok: guestOK, valid_users: validUsers };
+  const isEdit = shareEditName !== null;
+  const url    = isEdit ? '/api/shares/' + encodeURIComponent(shareEditName) : '/api/shares';
+  const method = isEdit ? 'PUT' : 'POST';
+
+  const resp = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to save share.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  closeShareModal();
+  loadShares();
+}
+
+async function deleteShare(name) {
+  if (!confirm(`Delete share "${name}"?\n\nThis removes network access — no data is deleted.`)) return;
+  const resp = await fetch('/api/shares/' + encodeURIComponent(name), { method: 'DELETE' });
+  const data = await resp.json();
+  if (resp.ok) loadShares();
+  else alert(data.error || 'Failed to delete share.');
+}
+
+// ===== NFS Shares =====
+let _nfsSharesCache = [];
+let nfsEditId = null;
+
+async function loadNFSShares() {
+  const el = document.getElementById('nfs-content');
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
+
+  try {
+    const resp = await fetch('/api/nfs/status');
+    const ss   = await resp.json();
+    const banner = document.getElementById('nfs-status-banner');
+    if (!ss.installed) {
+      banner.className = 'banner banner-warn';
+      banner.innerHTML = `⚠ nfs-kernel-server is not installed. Install it via <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="showPage('prereqs')">Prerequisites</button>`;
+    } else {
+      const isActive = ss.status === 'active';
+      banner.className = isActive ? 'banner banner-ok' : 'banner banner-danger';
+      const svcBtns = currentUser && currentUser.role === 'admin'
+        ? `<span style="margin-left:auto;display:flex;gap:6px;">
+             <button class="btn btn-ghost btn-sm" onclick="controlNFS('start')">Start</button>
+             <button class="btn btn-ghost btn-sm" onclick="controlNFS('stop')">Stop</button>
+             <button class="btn btn-ghost btn-sm" onclick="controlNFS('restart')">Restart</button>
+           </span>` : '';
+      if (isActive) {
+        banner.innerHTML = `✓ NFS server is running${svcBtns}`;
+      } else {
+        banner.innerHTML = `✗ nfs-server is <strong>${esc(ss.status)}</strong> — exports won't be accessible until it's running.${svcBtns}`;
+      }
+    }
+    const btn = document.getElementById('btn-create-nfs-share');
+    if (btn && currentUser && currentUser.role !== 'admin') btn.style.display = 'none';
+  } catch {}
+
+  try {
+    const resp   = await fetch('/api/nfs/shares');
+    const shares = await resp.json() || [];
+    renderNFSShares(el, shares);
+  } catch {
+    el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load NFS shares.</div>';
+  }
+}
+
+function renderNFSShares(el, shares) {
+  _nfsSharesCache = shares;
+  if (!shares.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🖧</div>
+        <h3>No NFS shares configured</h3>
+        <p>Create a share to make ZFS datasets accessible over NFS.</p>
+      </div>`;
+    return;
+  }
+
+  const rows = shares.map((s, i) => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px;">${esc(s.path)}</td>
+      <td style="font-family:monospace;font-size:12px;">${esc(s.client)}</td>
+      <td>${s.read_only
+        ? '<span class="badge badge-readonly">Read-only</span>'
+        : '<span class="badge badge-ok">Read/Write</span>'}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-2);">${nfsOptsDisplay(s)}</td>
+      <td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>
+      <td>${currentUser.role==='admin' ? `
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="openEditNFSShare(${i})">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteNFSShare('${esc(s.id)}')">Delete</button>
+        </div>` : ''}</td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Path</th><th>Client</th><th>Access</th><th>Options</th><th>Comment</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="text-3 text-sm" style="margin-top:12px;">
+      Mount from Linux/macOS: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px;">mount -t nfs &lt;server-ip&gt;:/path /mnt/point</code>
+    </div>`;
+}
+
+function nfsOptsDisplay(s) {
+  const opts = [s.read_only ? 'ro' : 'rw', s.sync ? 'sync' : 'async'];
+  if (s.no_subtree_check) opts.push('no_subtree_check');
+  if (s.no_root_squash)   opts.push('no_root_squash');
+  return opts.join(',');
+}
+
+async function openCreateNFSShare() {
+  nfsEditId = null;
+  document.getElementById('nfs-modal-title').textContent  = 'New NFS Share';
+  document.getElementById('nfs-submit-btn').textContent   = 'Create Share';
+  document.getElementById('nfs-path').value               = '';
+  document.getElementById('nfs-client').value             = '*';
+  document.getElementById('nfs-comment').value            = '';
+  document.getElementById('nfs-readonly').checked         = false;
+  document.getElementById('nfs-sync').checked             = true;
+  document.getElementById('nfs-nosubtree').checked        = true;
+  document.getElementById('nfs-norootsquash').checked     = false;
+  document.getElementById('nfs-share-alert').classList.add('hidden');
+  await loadNFSDatasetDropdown('');
+  document.getElementById('modal-nfs-share').classList.remove('hidden');
+  document.getElementById('nfs-path').focus();
+}
+
+function openEditNFSShare(i) {
+  const s = _nfsSharesCache[i];
+  if (!s) return;
+  nfsEditId = s.id;
+  document.getElementById('nfs-modal-title').textContent  = 'Edit NFS Share';
+  document.getElementById('nfs-submit-btn').textContent   = 'Save Changes';
+  document.getElementById('nfs-path').value               = s.path;
+  document.getElementById('nfs-client').value             = s.client;
+  document.getElementById('nfs-comment').value            = s.comment || '';
+  document.getElementById('nfs-readonly').checked         = !!s.read_only;
+  document.getElementById('nfs-sync').checked             = !!s.sync;
+  document.getElementById('nfs-nosubtree').checked        = !!s.no_subtree_check;
+  document.getElementById('nfs-norootsquash').checked     = !!s.no_root_squash;
+  document.getElementById('nfs-share-alert').classList.add('hidden');
+  loadNFSDatasetDropdown(s.path);
+  document.getElementById('modal-nfs-share').classList.remove('hidden');
+}
+
+async function loadNFSDatasetDropdown(selectedPath) {
+  const sel = document.getElementById('nfs-path-select');
+  try {
+    const resp = await fetch('/api/datasets');
+    const datasets = await resp.json() || [];
+    const mountable = datasets.filter(d => d.depth > 0 && d.mountpoint && d.mountpoint !== 'none' && d.mountpoint !== '-');
+    sel.innerHTML = '<option value="">— Select a ZFS dataset —</option>' +
+      mountable.map(d => `<option value="${esc(d.mountpoint)}"${d.mountpoint===selectedPath?' selected':''}>${esc(d.name)} → ${esc(d.mountpoint)}</option>`).join('');
+  } catch {
+    sel.innerHTML = '<option value="">— failed to load datasets —</option>';
+  }
+}
+
+function closeNFSShareModal() {
+  document.getElementById('modal-nfs-share').classList.add('hidden');
+  nfsEditId = null;
+}
+
+async function submitNFSShare(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('nfs-share-alert');
+  alertEl.classList.add('hidden');
+  const body = {
+    path:             document.getElementById('nfs-path').value.trim(),
+    client:           document.getElementById('nfs-client').value.trim() || '*',
+    comment:          document.getElementById('nfs-comment').value.trim(),
+    read_only:        document.getElementById('nfs-readonly').checked,
+    sync:             document.getElementById('nfs-sync').checked,
+    no_subtree_check: document.getElementById('nfs-nosubtree').checked,
+    no_root_squash:   document.getElementById('nfs-norootsquash').checked,
+  };
+  if (!body.path) {
+    alertEl.textContent = 'Path is required.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  const url    = nfsEditId ? `/api/nfs/shares/${nfsEditId}` : '/api/nfs/shares';
+  const method = nfsEditId ? 'PUT' : 'POST';
+  const resp = await fetch(url, {
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to save NFS share.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  closeNFSShareModal();
+  loadNFSShares();
+}
+
+async function deleteNFSShare(id) {
+  if (!confirm('Remove this NFS share?')) return;
+  const resp = await fetch(`/api/nfs/shares/${id}`, { method: 'DELETE' });
+  if (!resp.ok) {
+    const data = await resp.json();
+    alert(data.error || 'Failed to delete NFS share.');
+    return;
+  }
+  loadNFSShares();
+}
+
+// ===== Helpers =====
+function esc(s) {
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString(undefined,{dateStyle:'short',timeStyle:'short'});
+}
+function shortTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function timeSince(d) {
+  const s = Math.floor((Date.now()-d)/1000);
+  if (s < 60) return s+'s';
+  return Math.floor(s/60)+'m '+s%60+'s';
+}
+function roleBadge(role) {
+  if (role==='admin')     return 'admin';
+  if (role==='read-only') return 'readonly';
+  return 'smbonly';
+}
+
+// ===== OS Updates =====
+function initUpdatesPage() {
+  // Reset log but don't auto-check (apt-get update is slow).
+  document.getElementById('updates-log-wrap').style.display = 'none';
+  document.getElementById('updates-log').textContent = '';
+}
+
+async function checkUpdates() {
+  const btn = document.getElementById('btn-check-updates');
+  const status = document.getElementById('updates-status');
+  const pkgList = document.getElementById('updates-pkg-list');
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  status.textContent = 'Running apt-get update and checking for upgrades…';
+  pkgList.style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/updates/check');
+    const data = await resp.json();
+    if (!resp.ok) { status.textContent = 'Error: ' + (data.error || 'unknown'); return; }
+
+    if (data.count === 0) {
+      status.innerHTML = '<span style="color:var(--accent-ok);">✔ System is up to date.</span>';
+    } else {
+      status.innerHTML = `<span style="color:var(--accent-warn);">⬆ ${data.count} package${data.count===1?'':'s'} available for upgrade.</span>`;
+      const tbody = document.getElementById('updates-pkg-tbody');
+      tbody.innerHTML = data.packages.map(p =>
+        `<tr><td style="font-family:monospace;font-size:13px;">${esc(p.name)}</td><td style="font-size:13px;color:var(--accent-2);">${esc(p.version)}</td></tr>`
+      ).join('');
+      pkgList.style.display = '';
+    }
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻ Check for Updates';
+  }
+}
+
+function applyUpdates() {
+  const logWrap = document.getElementById('updates-log-wrap');
+  const log = document.getElementById('updates-log');
+  const btn = document.getElementById('btn-apply-updates');
+  logWrap.style.display = '';
+  log.textContent = '';
+  btn.disabled = true;
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(proto + '//' + location.host + '/ws/updates-apply');
+
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.line !== undefined) {
+      log.textContent += msg.line + '\n';
+      log.scrollTop = log.scrollHeight;
+    }
+    if (msg.done) {
+      ws.close();
+      btn.disabled = false;
+      if (msg.success) {
+        // Refresh the package list after a successful upgrade.
+        checkUpdates();
+      }
+    }
+  };
+
+  ws.onerror = () => {
+    log.textContent += '\n[WebSocket error]\n';
+    btn.disabled = false;
+  };
+
+  ws.onclose = () => {
+    if (btn.disabled) {
+      log.textContent += '\n[connection closed]\n';
+      btn.disabled = false;
+    }
+  };
+}
+
+// ===== Terminal =====
+let _term = null;
+let _termWs = null;
+let _termFit = null;
+let _termResizeObs = null;
+let _termOpen = false;
+
+function toggleTermPanel() {
+  _termOpen = !_termOpen;
+  const panel = document.getElementById('term-panel');
+  const navBtn = document.getElementById('nav-terminal');
+  panel.classList.toggle('hidden', !_termOpen);
+  navBtn.classList.toggle('active', _termOpen);
+
+  if (_termOpen) {
+    // Collapse activity bar to just its header.
+    const ab = document.getElementById('activity-bar');
+    if (ab && !ab.classList.contains('collapsed')) {
+      ab.classList.remove('expanded');
+      ab.classList.add('collapsed');
+      const chevron = document.getElementById('ab-chevron');
+      if (chevron) chevron.style.transform = '';
+    }
+    initTerminal();
+  } else {
+    // Close WebSocket when panel is hidden.
+    if (_termWs) { _termWs.close(); _termWs = null; }
+    if (_term) { _term.dispose(); _term = null; }
+    if (_termResizeObs) { _termResizeObs.disconnect(); _termResizeObs = null; }
+    document.getElementById('terminal-container').innerHTML = '';
+  }
+}
+
+function initTerminal() {
+  const container = document.getElementById('terminal-container');
+  if (_termWs && _termWs.readyState === WebSocket.OPEN) return;
+
+  if (_term) { _term.dispose(); _term = null; }
+  if (_termResizeObs) { _termResizeObs.disconnect(); _termResizeObs = null; }
+  container.innerHTML = '';
+
+  _term = new Terminal({
+    cursorBlink: true,
+    rows: 25,
+    fontSize: 14,
+    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+    theme: {
+      background: '#0d0d0f',
+      foreground: '#e2e2e6',
+      cursor: '#7c7cff',
+      selectionBackground: 'rgba(124,124,255,0.3)',
+      black:   '#1a1a1f', red:     '#ff5f57', green:  '#28ca42', yellow: '#ffbe2e',
+      blue:    '#7c7cff', magenta: '#bf5af2', cyan:   '#5ac8fa', white:  '#e2e2e6',
+      brightBlack:   '#6e6e80', brightRed:   '#ff6b6b', brightGreen:  '#5cffa3',
+      brightYellow:  '#ffd60a', brightBlue:  '#9595ff', brightMagenta:'#da8fff',
+      brightCyan:    '#70d7ff', brightWhite: '#ffffff',
+    },
+    scrollback: 5000,
+  });
+
+  _termFit = new FitAddon.FitAddon();
+  _term.loadAddon(_termFit);
+  _term.open(container);
+  // Fit cols to container width; rows is fixed at 25.
+  _termFit.fit();
+
+  document.getElementById('btn-term-reconnect').style.display = 'none';
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _termWs = new WebSocket(proto + '//' + location.host + '/ws/terminal');
+  _termWs.binaryType = 'arraybuffer';
+
+  _termWs.onopen = () => { _sendTermResize(); };
+
+  _termWs.onmessage = e => {
+    if (e.data instanceof ArrayBuffer) {
+      _term.write(new Uint8Array(e.data));
+    } else {
+      _term.write(e.data);
+    }
+  };
+
+  _termWs.onclose = () => {
+    if (_term) _term.write('\r\n\x1b[31m[connection closed]\x1b[0m\r\n');
+    document.getElementById('btn-term-reconnect').style.display = '';
+  };
+
+  _termWs.onerror = () => {
+    if (_term) _term.write('\r\n\x1b[31m[connection error]\x1b[0m\r\n');
+  };
+
+  _term.onData(data => {
+    if (_termWs && _termWs.readyState === WebSocket.OPEN) _termWs.send(data);
+  });
+
+  _term.onResize(({ cols, rows }) => _sendTermResize(cols, rows));
+
+  // Re-fit cols when window resizes, but keep rows fixed.
+  _termResizeObs = new ResizeObserver(() => {
+    if (_termFit) {
+      // FitAddon computes rows from height; since rows=25 is set, override after fit.
+      _termFit.fit();
+    }
+  });
+  _termResizeObs.observe(container);
+}
+
+function _sendTermResize(cols, rows) {
+  if (!_termWs || _termWs.readyState !== WebSocket.OPEN) return;
+  const c = cols || (_term && _term.cols) || 80;
+  const r = rows || (_term && _term.rows) || 25;
+  _termWs.send(JSON.stringify({ type: 'resize', cols: c, rows: r }));
+}
+
+function reconnectTerminal() { initTerminal(); }
+
+// ===== Service controls (SMB / NFS) =====
+async function controlSMB(action) {
+  try {
+    await fetch('/api/shares/service', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+  } catch {}
+  loadShares(); // re-fetch status + update banner
+}
+
+async function controlNFS(action) {
+  try {
+    await fetch('/api/nfs/service', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+  } catch {}
+  loadNFSShares(); // re-fetch status + update banner
+}
+
+// ===== Disk I/O charts =====
+const IO_POINTS = 30; // rolling window length
+let _ioCharts = null; // { read, write, busy } Chart instances
+let _ioDevices = [];  // ordered list of device names
+let _ioBufs = {};     // device → { read: Float32Array, write: Float32Array, busy: Float32Array }
+let _ioPollTimer = null;
+
+// Palette: one colour per device (cycles if > 8 disks)
+const IO_COLORS = [
+  '#3b82f6','#22d3ee','#a78bfa','#34d399','#fb923c','#f472b6','#facc15','#f87171'
+];
+
+function _ioColor(idx) { return IO_COLORS[idx % IO_COLORS.length]; }
+
+function _ioMakeDataset(label, color, buf) {
+  return {
+    label,
+    data: Array.from(buf),
+    fill: true,
+    borderColor: color,
+    backgroundColor: color + '55',
+    borderWidth: 1.5,
+    pointRadius: 0,
+    tension: 0.3,
+  };
+}
+
+function _ioChartOptions(yLabel) {
+  return {
+    responsive: false,
+    animation: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} ${yLabel}`,
+        },
+      },
+    },
+    scales: {
+      x: { display: false },
+      y: {
+        stacked: true,
+        display: true,
+        ticks: {
+          color: '#6b7280',
+          font: { size: 10 },
+          maxTicksLimit: 3,
+          callback: v => v.toFixed(0),
+        },
+        grid: { color: 'rgba(255,255,255,0.05)' },
+        border: { display: false },
+      },
+    },
+  };
+}
+
+function initIOCharts() {
+  if (_ioCharts) return; // already initialised
+
+  const labels = Array(IO_POINTS).fill('');
+
+  function makeChart(id, yLabel) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return null;
+    canvas.width  = canvas.parentElement.offsetWidth || 200;
+    canvas.height = 70;
+    return new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets: [] },
+      options: _ioChartOptions(yLabel),
+    });
+  }
+
+  _ioCharts = {
+    read:  makeChart('io-chart-read',  'KB/s'),
+    write: makeChart('io-chart-write', 'KB/s'),
+    busy:  makeChart('io-chart-busy',  '%'),
+  };
+}
+
+function _ioEnsureDevice(dev, idx) {
+  if (_ioBufs[dev]) return;
+  _ioBufs[dev] = {
+    read:  new Float32Array(IO_POINTS),
+    write: new Float32Array(IO_POINTS),
+    busy:  new Float32Array(IO_POINTS),
+  };
+  // Add dataset to each chart
+  const color = _ioColor(idx);
+  if (_ioCharts) {
+    _ioCharts.read.data.datasets.push(_ioMakeDataset(dev, color, _ioBufs[dev].read));
+    _ioCharts.write.data.datasets.push(_ioMakeDataset(dev, color, _ioBufs[dev].write));
+    _ioCharts.busy.data.datasets.push(_ioMakeDataset(dev, color, _ioBufs[dev].busy));
+  }
+}
+
+function _ioShift(arr, val) {
+  // Shift left, append new value at end
+  for (let i = 0; i < arr.length - 1; i++) arr[i] = arr[i + 1];
+  arr[arr.length - 1] = val;
+}
+
+function updateIOCharts(data) {
+  if (!_ioCharts || !data || !data.devices) return;
+
+  // Sync device list
+  const devKeys = Object.keys(data.devices).sort();
+  devKeys.forEach((dev, idx) => {
+    if (!_ioDevices.includes(dev)) {
+      _ioDevices.push(dev);
+      _ioEnsureDevice(dev, idx);
+    }
+  });
+
+  // Push new samples
+  _ioDevices.forEach((dev, i) => {
+    const sample = data.devices[dev] || { read_kbps: 0, write_kbps: 0, busy_pct: 0 };
+    const buf = _ioBufs[dev];
+    _ioShift(buf.read,  sample.read_kbps);
+    _ioShift(buf.write, sample.write_kbps);
+    _ioShift(buf.busy,  sample.busy_pct);
+
+    // Sync chart dataset data arrays
+    if (_ioCharts) {
+      const rd = _ioCharts.read.data.datasets[i];
+      const wd = _ioCharts.write.data.datasets[i];
+      const bd = _ioCharts.busy.data.datasets[i];
+      if (rd) rd.data = Array.from(buf.read);
+      if (wd) wd.data = Array.from(buf.write);
+      if (bd) bd.data = Array.from(buf.busy);
+    }
+  });
+
+  if (_ioCharts) {
+    _ioCharts.read.update('none');
+    _ioCharts.write.update('none');
+    _ioCharts.busy.update('none');
+  }
+}
+
+async function _fetchDiskIO() {
+  try {
+    const resp = await fetch('/api/sysinfo/diskio');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const hasDevs = data.devices && Object.keys(data.devices).length > 0;
+    const bar = document.getElementById('io-bar');
+    if (hasDevs) {
+      if (bar && !bar.classList.contains('io-bar-visible')) {
+        bar.classList.add('io-bar-visible');
+        initIOCharts();
+      }
+      updateIOCharts(data);
+    }
+  } catch (_) {}
+}
+
+function startIOPoller() {
+  if (_ioPollTimer) return;
+  _fetchDiskIO(); // immediate first fetch
+  _ioPollTimer = setInterval(_fetchDiskIO, 5000);
+}
+</script>
+</body>
+</html>

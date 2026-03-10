@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZFS NAS — Initial Setup</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .setup-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-3);
+      margin-bottom: 20px;
+    }
+    .setup-step-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--gradient);
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+
+      <div class="auth-logo">
+        <img src="/static/logo.svg" alt="ZFS NAS" style="height:100px;width:320px;object-fit:contain;">
+      </div>
+
+      <div class="setup-step">
+        <div class="setup-step-dot"></div>
+        First start — create your administrator account
+      </div>
+
+      <h1>Welcome</h1>
+      <p class="auth-subtitle">This account will have full administrative access to the portal.</p>
+
+      <div id="alert" class="alert alert-error hidden"></div>
+
+      <form id="setup-form" onsubmit="handleSetup(event)">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username"
+                 placeholder="admin" autocomplete="username" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email"
+                 placeholder="you@example.com" autocomplete="email" required>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password"
+                 placeholder="Minimum 8 characters" autocomplete="new-password" required>
+        </div>
+
+        <div class="form-group">
+          <label for="confirm_password">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password"
+                 placeholder="Repeat password" autocomplete="new-password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+          Create Administrator Account
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    async function handleSetup(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const alert = document.getElementById('alert');
+      alert.classList.add('hidden');
+
+      const form = e.target;
+      const password = form.password.value;
+      const confirm  = form.confirm_password.value;
+
+      if (password !== confirm) {
+        showAlert('Passwords do not match.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Creating account…';
+
+      try {
+        const resp = await fetch('/api/auth/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username:         form.username.value.trim(),
+            email:            form.email.value.trim(),
+            password:         password,
+            confirm_password: confirm,
+          }),
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          showAlert(data.error || 'Setup failed. Please try again.');
+          btn.disabled = false;
+          btn.innerHTML = 'Create Administrator Account';
+          return;
+        }
+
+        btn.innerHTML = '✓ Account created — redirecting…';
+        setTimeout(() => { window.location.href = '/login'; }, 800);
+
+      } catch (err) {
+        showAlert('Network error. Is the server reachable?');
+        btn.disabled = false;
+        btn.innerHTML = 'Create Administrator Account';
+      }
+    }
+
+    function showAlert(msg) {
+      const el = document.getElementById('alert');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
