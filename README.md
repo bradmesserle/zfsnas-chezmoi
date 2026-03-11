@@ -1,23 +1,18 @@
 <p align="center">
   <img src="static/logo.svg" alt="ZFS NAS Logo" width="700"/>
 </p>
-
 <p align="center">
   <strong>A ZFS NAS management portal that gets out of your way.</strong><br/>
   Single binary. Secure. No database. No bloat.
 </p>
-
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go" alt="Go 1.22+"/>
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04%2B-E95420?style=flat-square&logo=ubuntu" alt="Ubuntu 22.04+"/>
   <img src="https://img.shields.io/badge/License-MIT-8a2cff?style=flat-square" alt="MIT License"/>
   <img src="https://img.shields.io/badge/Version-2.0.0-00eaff?style=flat-square" alt="Version 2.0.0"/>
 </p>
-
 ---
-
 ## Why ZFS NAS Chezmoi?
-
 Most NAS management software is slow to install, slow to load, and buried under layers of configuration. ZFS NAS Chezmoi is different:
 
 - **One binary, zero dependencies** — compile once, copy anywhere, run. No Docker. No Node. No Python runtime.
