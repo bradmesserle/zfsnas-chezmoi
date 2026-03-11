@@ -11,9 +11,9 @@
   <img src="https://img.shields.io/badge/License-MIT-8a2cff?style=flat-square" alt="MIT License"/>
   <img src="https://img.shields.io/badge/Version-2.0.0-00eaff?style=flat-square" alt="Version 2.0.0"/>
 </p>
----
+
 ## Why ZFS NAS Chezmoi?
-Most NAS management software is slow to install, slow to load, and buried under layers of configuration. ZFS NAS Chezmoi is different:
+Most NAS management software are slow to install, slow to load, and buried under layers of configuration. ZFS NAS Chezmoi is different:
 
 - **One binary, zero dependencies** — compile once, copy anywhere, run. No Docker. No Node. No Python runtime.
 - **Instant startup** — the portal is live in under a second. All static assets are embedded directly in the binary.
