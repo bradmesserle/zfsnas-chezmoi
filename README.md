@@ -57,7 +57,7 @@ Most NAS management software are slow to install, slow to load, and buried under
 
 | Requirement | Version |
 |---|---|
-| Ubuntu | 24.04 LTS or later (<**26.04 highly recommended** for zfs expand support) |
+| Ubuntu | 24.04 LTS or later (**26.04 highly recommended** for zfs expand support) |
 | Go (if you build from source) | 1.22 or later |
 | `sudo` access without password | Required for ZFS, Samba/NFS management, and SMART commands |
 
