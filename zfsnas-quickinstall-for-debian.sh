@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  ZFS NAS Portal — Quick Installer for Debian / Ubuntu
+#  Script version 1.1
 #  https://github.com/macgaver/zfsnas-chezmoi
 #
 #  Usage (run as root or with sudo):
