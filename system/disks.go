@@ -394,27 +394,51 @@ func saveSmartCache(configDir string, cache map[string]DiskInfo) error {
 // ---- Helpers ----
 
 // zfsPoolDiskNames returns the set of kernel disk base names (e.g. "sda")
-// that are in use by the currently imported ZFS pool — data members AND
-// cache/log devices. Resolves symlinks and strips partition suffixes.
+// that are in use by any currently imported ZFS pool — data members AND
+// cache/log devices. Uses `zpool status -P` for full paths, then resolves
+// any by-partuuid/UUID paths to real device names via lsblk/blkid.
 func zfsPoolDiskNames() map[string]bool {
 	result := make(map[string]bool)
-	pool, err := GetPool()
-	if err != nil || pool == nil {
+	out, err := exec.Command("sudo", "zpool", "status", "-P").Output()
+	if err != nil || len(out) == 0 {
 		return result
 	}
-	addDev := func(dev string) {
-		real, err := filepath.EvalSymlinks(dev)
-		if err != nil {
-			real = dev
+
+	validStates := map[string]bool{
+		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
+		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
+	}
+	vdevPrefixes := []string{"mirror-", "raidz2-", "raidz1-", "raidz-", "spare-", "log-", "cache-"}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
 		}
-		base := filepath.Base(real)
-		result[diskBaseName(base)] = true
-	}
-	for _, member := range pool.Members {
-		addDev(member)
-	}
-	for _, cache := range pool.CacheDevs {
-		addDev(cache)
+		name, state := fields[0], fields[1]
+		if !validStates[state] {
+			continue
+		}
+		if name == "NAME" {
+			continue
+		}
+		isVdev := false
+		for _, pfx := range vdevPrefixes {
+			if strings.HasPrefix(name, pfx) {
+				isVdev = true
+				break
+			}
+		}
+		if isVdev {
+			continue
+		}
+		real := resolveDevPath(name)
+		base := diskBaseName(filepath.Base(real))
+		// Skip anything that still looks like an unresolved UUID.
+		if base == "" || strings.Contains(base, "-") || len(base) > 20 {
+			continue
+		}
+		result[base] = true
 	}
 	return result
 }

@@ -23,9 +23,11 @@ type Pool struct {
 	UsableUsed  uint64   `json:"usable_used"`  // root dataset used (zfs list)
 	UsableAvail uint64   `json:"usable_avail"` // root dataset avail (zfs list)
 	Health      string   `json:"health"`
-	Members       []string `json:"members"`        // raw device paths as tracked by zpool (may be by-partuuid)
-	MemberDevices []string `json:"member_devices"` // resolved canonical /dev/sdX paths
-	MemberRoles   []string `json:"member_roles"`   // per-member vdev role: "stripe"|"mirror"|"raidz1"|"raidz2"
+	Members         []string `json:"members"`          // raw device paths as tracked by zpool (may be by-partuuid)
+	MemberDevices   []string `json:"member_devices"`   // resolved canonical /dev/sdX paths
+	MemberRoles     []string `json:"member_roles"`     // per-member vdev role: "stripe"|"mirror"|"raidz1"|"raidz2"
+	MemberStatuses  []string `json:"member_statuses"`  // per-member device state: "ONLINE"|"FAULTED"|etc
+	MemberPresent   []bool   `json:"member_present"`   // per-member: true if the device path exists in /dev
 	CacheDevs     []string `json:"cache_devs"`      // raw L2ARC cache paths (may be by-partuuid)
 	CacheDevices  []string `json:"cache_devices"`   // resolved canonical /dev/sdX paths
 	VdevType    string   `json:"vdev_type"`  // "stripe" | "mirror" | "raidz1" | "raidz2"
@@ -59,6 +61,8 @@ func GetPool() (*Pool, error) {
 	p.UsableSize = p.UsableUsed + p.UsableAvail
 	// Populate member devices from `zpool status -P`.
 	p.Members, p.MemberDevices, p.MemberRoles = poolMembers(p.Name)
+	p.MemberStatuses = poolMemberStatuses(p.Name)
+	p.MemberPresent  = poolMemberPresent(p.Members)
 	p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
 	p.VdevType   = poolVdevType(p.Name)
 	p.Operation  = poolOperation(p.Name)
@@ -86,6 +90,77 @@ func parsePool(line string) (*Pool, error) {
 	}, nil
 }
 
+// GetAllPools returns all currently imported ZFS pools.
+func GetAllPools() ([]*Pool, error) {
+	out, err := exec.Command("sudo", "zpool", "list", "-Hp",
+		"-o", "name,size,alloc,free,health").Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return []*Pool{}, nil
+	}
+	var pools []*Pool
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		p, err := parsePool(line)
+		if err != nil {
+			continue
+		}
+		p.UsableUsed, p.UsableAvail = poolRootUsage(p.Name)
+		p.UsableSize = p.UsableUsed + p.UsableAvail
+		p.Members, p.MemberDevices, p.MemberRoles = poolMembers(p.Name)
+		p.MemberStatuses = poolMemberStatuses(p.Name)
+		p.MemberPresent  = poolMemberPresent(p.Members)
+		p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
+		p.VdevType  = poolVdevType(p.Name)
+		p.Operation = poolOperation(p.Name)
+		p.Compression, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+		pools = append(pools, p)
+	}
+	return pools, nil
+}
+
+// GetPoolByName returns the pool with the given name, or nil if not found.
+func GetPoolByName(name string) (*Pool, error) {
+	out, err := exec.Command("sudo", "zpool", "list", "-Hp",
+		"-o", "name,size,alloc,free,health", name).Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return nil, nil
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	p, err := parsePool(lines[0])
+	if err != nil {
+		return nil, err
+	}
+	p.UsableUsed, p.UsableAvail = poolRootUsage(p.Name)
+	p.UsableSize = p.UsableUsed + p.UsableAvail
+	p.Members, p.MemberDevices, p.MemberRoles = poolMembers(p.Name)
+	p.MemberStatuses = poolMemberStatuses(p.Name)
+	p.MemberPresent  = poolMemberPresent(p.Members)
+	p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
+	p.VdevType  = poolVdevType(p.Name)
+	p.Operation = poolOperation(p.Name)
+	p.Compression, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+	return p, nil
+}
+
+// GetPoolStatusByName returns the raw output of `zpool status` for a specific pool.
+// When name is empty it returns status for all pools.
+func GetPoolStatusByName(name string) (string, error) {
+	args := []string{"sudo", "zpool", "status"}
+	if name != "" {
+		args = append(args, name)
+	}
+	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	if err != nil && len(out) == 0 {
+		return "", fmt.Errorf("zpool status: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // poolRootUsage returns the used and avail bytes for the pool's root dataset.
 func poolRootUsage(poolName string) (used, avail uint64) {
 	out, err := exec.Command("sudo", "zfs", "list", "-Hp",
@@ -101,33 +176,37 @@ func poolRootUsage(poolName string) (used, avail uint64) {
 	return
 }
 
-// poolMembers parses `zpool status -P` to return physical device paths of
-// DATA vdevs only (excludes cache, log, and spare sections).
-// Returns (rawPaths, resolvedPaths, roles):
-//   - rawPaths: exactly as zpool reports (may be /dev/disk/by-partuuid/…)
-//   - resolvedPaths: canonical /dev/sdX equivalents
-//   - roles: per-disk vdev role — "stripe" | "mirror" | "raidz1" | "raidz2"
-func poolMembers(poolName string) (raw, resolved, roles []string) {
-	out, err := exec.Command("sudo", "zpool", "status", "-P", poolName).Output()
-	if err != nil {
-		return nil, nil, nil
+// zpoolStatusDevices runs `zpool status [flags] poolName` and extracts device
+// names from the config section in output order.  section controls which
+// section to collect ("data" for data vdevs, "cache" for cache devices).
+// Returns the ordered list of device name strings exactly as zpool printed them.
+func zpoolStatusDevices(poolName, section string, withFullPaths bool) []string {
+	args := []string{"sudo", "zpool", "status"}
+	if withFullPaths {
+		args = append(args, "-P")
 	}
-	inConfig := false
-	inDataSection := true
-	skipSections := map[string]bool{"cache": true, "log": true, "spare": true}
+	args = append(args, poolName)
+	out, err := exec.Command(args[0], args[1:]...).Output()
+	if err != nil {
+		return nil
+	}
+
 	validStates := map[string]bool{
 		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
 		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
 	}
 	vdevPrefixes := []string{"mirror-", "raidz2-", "raidz1-", "raidz-", "spare-", "log-", "cache-"}
+	skipSections := map[string]bool{"cache": true, "log": true, "spare": true}
 
-	poolIndent := -1       // indent of the pool name line
-	currentRole := "stripe" // role assigned to devices under the current top-level vdev
+	inConfig := false
+	inTarget := section == "data" // data section is active by default
+	poolIndent := -1
 
 	countIndent := func(line string) int {
 		return len(line) - len(strings.TrimLeft(line, " \t"))
 	}
 
+	var names []string
 	for _, line := range strings.Split(string(out), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "config:") {
@@ -146,26 +225,34 @@ func poolMembers(poolName string) (raw, resolved, roles []string) {
 		fields := strings.Fields(trimmed)
 		indent := countIndent(line)
 
-		// Single-token line with no valid state = section header.
+		// Section header (single token or token with state but not a valid-state token).
 		if len(fields) == 1 {
-			inDataSection = !skipSections[strings.ToLower(trimmed)]
+			sectionName := strings.ToLower(trimmed)
+			if section == "data" {
+				inTarget = !skipSections[sectionName]
+			} else {
+				inTarget = sectionName == section
+			}
 			continue
 		}
 		if len(fields) < 2 {
 			continue
 		}
 		name, state := fields[0], fields[1]
-
 		if !validStates[state] {
-			// Section header with extra tokens.
-			inDataSection = !skipSections[strings.ToLower(name)]
+			sectionName := strings.ToLower(name)
+			if section == "data" {
+				inTarget = !skipSections[sectionName]
+			} else {
+				inTarget = sectionName == section
+			}
 			continue
 		}
-		if !inDataSection {
+		if !inTarget {
 			continue
 		}
 
-		// Pool name line: record its indent as the base level.
+		// Pool name line.
 		if name == poolName {
 			poolIndent = indent
 			continue
@@ -174,64 +261,97 @@ func poolMembers(poolName string) (raw, resolved, roles []string) {
 			continue
 		}
 
-		// Top-level vdev group (mirror-0, raidz1-0, …) or direct top-level disk.
-		if indent == poolIndent+2 {
-			isVdev := false
-			for _, pfx := range vdevPrefixes {
-				if strings.HasPrefix(name, pfx) {
-					isVdev = true
-					switch {
-					case strings.HasPrefix(name, "mirror-"):
-						currentRole = "mirror"
-					case strings.HasPrefix(name, "raidz2-"):
-						currentRole = "raidz2"
-					default: // raidz1- or raidz-
-						currentRole = "raidz1"
-					}
-					break
-				}
-			}
-			if !isVdev {
-				// Direct top-level disk — it is a stripe vdev on its own.
-				raw = append(raw, name)
-				resolved = append(resolved, resolveDevPath(name))
-				roles = append(roles, "stripe")
-			}
-			continue
-		}
-
-		// Member of a vdev group (indent > poolIndent+2).
-		isVdevName := false
+		// Skip vdev group headers.
+		isVdev := false
 		for _, pfx := range vdevPrefixes {
 			if strings.HasPrefix(name, pfx) {
-				isVdevName = true
+				isVdev = true
 				break
 			}
 		}
-		if isVdevName || name == "NAME" {
+		if isVdev || name == "NAME" {
 			continue
 		}
-		raw = append(raw, name)
-		resolved = append(resolved, resolveDevPath(name))
-		roles = append(roles, currentRole)
+
+		// Leaf device.
+		if section == "data" {
+			// Data: collect top-level stripe disks and vdev members.
+			if indent >= poolIndent+2 {
+				names = append(names, name)
+			}
+		} else {
+			// Cache/other: collect all leaf devices.
+			names = append(names, name)
+		}
 	}
+	return names
+}
+
+// poolMembers parses zpool status output to return physical device paths of
+// DATA vdevs only (excludes cache, log, and spare sections).
+// Returns (rawPaths, resolvedPaths, roles):
+//   - rawPaths: exactly as zpool reports with -P (may be /dev/disk/by-partuuid/…)
+//   - resolvedPaths: paths as zpool reports without -P (ZFS resolves its own stored paths)
+//   - roles: per-disk vdev role — "stripe" | "mirror" | "raidz1" | "raidz2"
+func poolMembers(poolName string) (raw, resolved, roles []string) {
+	// Run with -P for raw stored paths.
+	rawNames := zpoolStatusDevices(poolName, "data", true)
+	// Run without -P: ZFS resolves its own partuuid/by-id paths to real device names.
+	resolvedNames := zpoolStatusDevices(poolName, "data", false)
+
+	if len(rawNames) == 0 {
+		return nil, nil, nil
+	}
+
+	// Ensure resolved list matches raw list length; fall back to resolveDevPath if shorter.
+	for i, r := range rawNames {
+		var res string
+		if i < len(resolvedNames) {
+			res = resolvedNames[i]
+		}
+		// If ZFS returned an unresolved path (by-partuuid, by-id, or bare UUID string),
+		// fall back to our own resolution using the raw -P path.
+		if res == "" || strings.Contains(res, "/by-partuuid/") || strings.Contains(res, "/by-id/") || isPartuuidString(res) {
+			res = resolveDevPath(r)
+		}
+		// Ensure path has /dev/ prefix.
+		if res != "" && !strings.HasPrefix(res, "/dev/") {
+			res = "/dev/" + res
+		}
+		raw = append(raw, r)
+		resolved = append(resolved, res)
+		roles = append(roles, "stripe") // role re-computed below
+	}
+
+	// Re-compute roles from the -P output (structure is the same).
+	roles = poolMemberRoles(poolName, len(raw))
 	return raw, resolved, roles
 }
 
-// poolCacheDevs parses `zpool status -P` to return L2ARC cache device paths.
-// Returns (rawPaths, resolvedPaths): rawPaths are exactly as zpool reports;
-// resolvedPaths are the canonical /dev/sdX equivalents.
-func poolCacheDevs(poolName string) (raw, resolved []string) {
+// poolMemberRoles returns the vdev role for each data member in order.
+func poolMemberRoles(poolName string, count int) []string {
 	out, err := exec.Command("sudo", "zpool", "status", "-P", poolName).Output()
-	if err != nil {
-		return nil, nil
+	if err != nil || count == 0 {
+		roles := make([]string, count)
+		for i := range roles {
+			roles[i] = "stripe"
+		}
+		return roles
 	}
-	inConfig := false
-	inCache := false
 	validStates := map[string]bool{
 		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
 		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
 	}
+	vdevPrefixes := []string{"mirror-", "raidz2-", "raidz1-", "raidz-", "spare-", "log-", "cache-"}
+	skipSections := map[string]bool{"cache": true, "log": true, "spare": true}
+	inConfig, inData, seenPool := false, true, false
+	poolIndent := -1
+	vdevIndent := -1 // indent of vdev group headers (or direct-child stripe disks)
+	currentRole := "stripe"
+	countIndent := func(line string) int {
+		return len(line) - len(strings.TrimLeft(line, " \t"))
+	}
+	var roles []string
 	for _, line := range strings.Split(string(out), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "config:") {
@@ -248,8 +368,9 @@ func poolCacheDevs(poolName string) (raw, resolved []string) {
 			continue
 		}
 		fields := strings.Fields(trimmed)
-		if len(fields) == 1 && !validStates[trimmed] {
-			inCache = trimmed == "cache"
+		indent := countIndent(line)
+		if len(fields) == 1 {
+			inData = !skipSections[strings.ToLower(trimmed)]
 			continue
 		}
 		if len(fields) < 2 {
@@ -257,27 +378,183 @@ func poolCacheDevs(poolName string) (raw, resolved []string) {
 		}
 		name, state := fields[0], fields[1]
 		if !validStates[state] {
-			inCache = strings.ToLower(name) == "cache"
+			inData = !skipSections[strings.ToLower(name)]
 			continue
 		}
-		if !inCache {
+		if !inData {
 			continue
 		}
-		skipPrefixes := []string{"raidz", "mirror-", "spare-", "log-", "cache-"}
-		skip := false
-		for _, pfx := range skipPrefixes {
+		// Capture pool name line and its indent.
+		if name == poolName {
+			seenPool = true
+			poolIndent = indent
+			continue
+		}
+		if !seenPool || poolIndent < 0 {
+			continue
+		}
+		// Determine the vdev-level indent from the first direct child we encounter.
+		if vdevIndent < 0 && indent > poolIndent {
+			vdevIndent = indent
+		}
+		// Check if this is a vdev group header (mirror-N, raidz1-N, etc.).
+		isVdev := false
+		for _, pfx := range vdevPrefixes {
 			if strings.HasPrefix(name, pfx) {
-				skip = true
+				isVdev = true
+				switch {
+				case strings.HasPrefix(name, "mirror-"):
+					currentRole = "mirror"
+				case strings.HasPrefix(name, "raidz2-"):
+					currentRole = "raidz2"
+				case strings.HasPrefix(name, "raidz1-"), strings.HasPrefix(name, "raidz-"):
+					currentRole = "raidz1"
+				}
 				break
 			}
 		}
-		if skip || name == poolName {
+		if isVdev || name == "NAME" {
 			continue
 		}
-		raw = append(raw, name)
-		resolved = append(resolved, resolveDevPath(name))
+		// Direct child of pool (at vdev indent level, not inside a named vdev) → stripe.
+		if indent == vdevIndent {
+			currentRole = "stripe"
+		}
+		roles = append(roles, currentRole)
+	}
+	// Pad or trim to match count.
+	for len(roles) < count {
+		roles = append(roles, "stripe")
+	}
+	return roles[:count]
+}
+
+// poolCacheDevs parses zpool status output to return L2ARC cache device paths.
+// Returns (rawPaths, resolvedPaths): rawPaths are exactly as zpool reports with -P;
+// resolvedPaths use the ZFS-resolved names (without -P).
+func poolCacheDevs(poolName string) (raw, resolved []string) {
+	rawNames := zpoolStatusDevices(poolName, "cache", true)
+	resolvedNames := zpoolStatusDevices(poolName, "cache", false)
+	for i, r := range rawNames {
+		var res string
+		if i < len(resolvedNames) {
+			res = resolvedNames[i]
+		}
+		if res == "" || strings.Contains(res, "/by-partuuid/") || strings.Contains(res, "/by-id/") {
+			res = resolveDevPath(r)
+		}
+		if res != "" && !strings.HasPrefix(res, "/dev/") {
+			res = "/dev/" + res
+		}
+		raw = append(raw, r)
+		resolved = append(resolved, res)
 	}
 	return raw, resolved
+}
+
+// poolMemberStatuses returns the per-device state for every leaf device in the
+// pool's data vdevs (same order as poolMembers).
+func poolMemberStatuses(poolName string) []string {
+	out, err := exec.Command("sudo", "zpool", "status", poolName).Output()
+	if err != nil {
+		return nil
+	}
+	validStates := map[string]bool{
+		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
+		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
+	}
+	vdevPrefixes := []string{"mirror-", "raidz2-", "raidz1-", "raidz-", "spare-", "log-", "cache-"}
+	skipSections := map[string]bool{"cache": true, "log": true, "spare": true}
+
+	inConfig, inData := false, true
+	poolIndent := -1
+	countIndent := func(line string) int {
+		return len(line) - len(strings.TrimLeft(line, " \t"))
+	}
+	var statuses []string
+	for _, line := range strings.Split(string(out), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "config:") { inConfig = true; continue }
+		if !inConfig { continue }
+		if strings.HasPrefix(trimmed, "errors:") { break }
+		if trimmed == "" { continue }
+		fields := strings.Fields(trimmed)
+		indent := countIndent(line)
+		if len(fields) < 2 || !validStates[fields[1]] { continue }
+		name := fields[0]
+		if name == "NAME" { continue }
+		if poolIndent < 0 { poolIndent = indent; continue } // pool line itself
+		if indent <= poolIndent { continue }
+		if skipSections[strings.ToLower(name)] { inData = false; continue }
+		if !inData { continue }
+		isVdev := false
+		for _, pfx := range vdevPrefixes {
+			if strings.HasPrefix(name, pfx) { isVdev = true; break }
+		}
+		if !isVdev {
+			statuses = append(statuses, fields[1])
+		}
+	}
+	return statuses
+}
+
+// poolMemberPresent checks whether each raw member path physically exists under /dev.
+// This is used to detect disks that are tracked as UNAVAIL/REMOVED by ZFS but have
+// reappeared on the system (e.g. after a cable reseat or HBA reset).
+func poolMemberPresent(members []string) []bool {
+	present := make([]bool, len(members))
+	for i, m := range members {
+		path := m
+		if path != "" && !strings.HasPrefix(path, "/") {
+			path = "/dev/" + path
+		}
+		if path != "" {
+			_, err := os.Stat(path)
+			present[i] = (err == nil)
+		}
+	}
+	return present
+}
+
+// OnlinePoolDisks runs `zpool online <pool> <dev>...` to re-mark one or more
+// member disks as online after they have physically reappeared.
+func OnlinePoolDisks(poolName string, devices []string) error {
+	if len(devices) == 0 {
+		return nil
+	}
+	args := append([]string{"sudo", "zpool", "online", poolName}, devices...)
+	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// SetDiskOffline takes a pool member disk offline using `zpool offline`.
+func SetDiskOffline(poolName, device string) error {
+	out, err := exec.Command("sudo", "zpool", "offline", poolName, device).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// SetDiskOnline brings an offline pool member disk back online using `zpool online`.
+func SetDiskOnline(poolName, device string) error {
+	out, err := exec.Command("sudo", "zpool", "online", poolName, device).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// ClearPool runs `zpool clear` to clear error counts and re-enable faulted devices.
+func ClearPool(poolName string) error {
+	out, err := exec.Command("sudo", "zpool", "clear", poolName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // AddPoolCache adds a device as an L2ARC cache to the pool.
@@ -308,12 +585,80 @@ func RemovePoolCache(poolName, device string) error {
 // /dev/disk/by-uuid/...) to their canonical /dev/sdX path.
 // Returns the original path unchanged if resolution fails or the result
 // does not look like a block device.
+// isPartuuidString returns true if s is a bare PARTUUID (8-4-4-4-12 hex with dashes).
+func isPartuuidString(s string) bool {
+	if len(s) != 36 || strings.Count(s, "-") != 4 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// blkidPartuuidMap runs `sudo blkid -o export` and returns a map of
+// lowercase PARTUUID → device path. This reads from disk directly and works
+// even on systems without udev or /dev/disk/by-partuuid/ symlinks.
+func blkidPartuuidMap() map[string]string {
+	out, err := exec.Command("sudo", "blkid", "-o", "export").Output()
+	if err != nil || len(out) == 0 {
+		return nil
+	}
+	m := make(map[string]string)
+	var devName string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			devName = ""
+			continue
+		}
+		if strings.HasPrefix(line, "DEVNAME=") {
+			devName = strings.TrimPrefix(line, "DEVNAME=")
+		} else if strings.HasPrefix(line, "PARTUUID=") && devName != "" {
+			uuid := strings.ToLower(strings.TrimPrefix(line, "PARTUUID="))
+			m[uuid] = devName
+		}
+	}
+	return m
+}
+
 func resolveDevPath(p string) string {
-	real, err := filepath.EvalSymlinks(p)
-	if err != nil || !strings.HasPrefix(real, "/dev/") {
+	// 1. Direct symlink resolution (works when udev created /dev/disk/by-partuuid/).
+	if real, err := filepath.EvalSymlinks(p); err == nil && strings.HasPrefix(real, "/dev/") {
+		return real
+	}
+
+	// Extract UUID from a /by-partuuid/ path or a bare UUID string.
+	var uuid string
+	if strings.Contains(p, "/by-partuuid/") {
+		uuid = strings.ToLower(filepath.Base(p))
+	} else if isPartuuidString(p) {
+		uuid = strings.ToLower(p)
+	}
+	if uuid == "" {
 		return p
 	}
-	return real
+
+	// 2. lsblk (fast, uses sysfs — works on most systems).
+	if out, err := exec.Command("lsblk", "-ln", "-o", "NAME,PARTUUID").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 2 && strings.ToLower(fields[1]) == uuid {
+				return "/dev/" + fields[0]
+			}
+		}
+	}
+
+	// 3. blkid (reads from disk directly, works without udev/sysfs).
+	if m := blkidPartuuidMap(); m != nil {
+		if dev, ok := m[uuid]; ok {
+			return dev
+		}
+	}
+
+	return p
 }
 
 // PrepareZFSPartition wipes a disk and creates a single GPT partition of type
@@ -331,7 +676,6 @@ func PrepareZFSPartition(device string) (string, error) {
 	}
 	// Inform the kernel of the new partition table.
 	exec.Command("sudo", "partprobe", device).Run() //nolint
-	exec.Command("sudo", "udevadm", "settle", "--timeout=10").Run() //nolint
 
 	// Locate the new partition's by-partuuid symlink.
 	devName := filepath.Base(device) // e.g. "sda" or "nvme0n1"
@@ -848,6 +1192,23 @@ type DatasetCreateOptions struct {
 }
 
 // ListDatasets returns all datasets under poolName as a flat list (pool root first).
+// ListAllDatasets returns datasets from every currently imported pool.
+func ListAllDatasets() ([]Dataset, error) {
+	pools, err := GetAllPools()
+	if err != nil {
+		return nil, err
+	}
+	var all []Dataset
+	for _, p := range pools {
+		ds, err := ListDatasets(p.Name)
+		if err != nil {
+			continue
+		}
+		all = append(all, ds...)
+	}
+	return all, nil
+}
+
 func ListDatasets(poolName string) ([]Dataset, error) {
 	out, err := exec.Command("sudo", "zfs", "list", "-Hp", "-r",
 		"-t", "filesystem",

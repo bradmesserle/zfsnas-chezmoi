@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 	"zfsnas/internal/alerts"
 	"zfsnas/internal/audit"
@@ -69,30 +70,132 @@ func isSmartUnsupported(msg string) bool {
 	return false
 }
 
+// isBadPoolHealth returns true for pool states that represent a problem.
+func isBadPoolHealth(h string) bool {
+	switch h {
+	case "DEGRADED", "FAULTED", "SUSPENDED", "UNAVAIL", "REMOVED":
+		return true
+	}
+	return false
+}
+
+// ── Shared health-event state ─────────────────────────────────────────────────
+//
+// These maps are shared between the background poller and pool operation handlers
+// so that recovery events are written immediately when a fix action completes,
+// not only at the next 5-minute poll cycle. The shared state also ensures the
+// poller does not write a duplicate event for a transition already recorded by a
+// handler.
+
+var (
+	healthEvMu           sync.Mutex
+	healthEvPoolStates   = map[string]string{}   // pool name → last known health
+	healthEvMemberStates = map[string][]string{} // pool name → last known per-member statuses
+	smtpLastPoolHealths  = map[string]string{}   // pool name → health at last SMTP send
+)
+
+// LogPoolHealthEvents checks whether a pool's health or member disk statuses
+// have changed since the last call and writes audit entries for every transition.
+// It is safe to call from multiple goroutines and is idempotent for the same
+// state — calling it twice with an unchanged pool writes nothing.
+func LogPoolHealthEvents(pool *system.Pool) {
+	if pool == nil {
+		return
+	}
+	healthEvMu.Lock()
+	defer healthEvMu.Unlock()
+
+	// ── Pool-level health ─────────────────────────────────────────────────────
+	prevHealth := healthEvPoolStates[pool.Name]
+	currHealth := pool.Health
+	currBad    := isBadPoolHealth(currHealth)
+	prevBad    := isBadPoolHealth(prevHealth)
+
+	if currBad && prevHealth != currHealth {
+		// New problem, or health worsened (e.g. DEGRADED → FAULTED).
+		audit.Log(audit.Entry{
+			User:    "system",
+			Role:    "system",
+			Action:  audit.ActionPoolProblem,
+			Target:  pool.Name,
+			Result:  audit.ResultError,
+			Details: "pool health: " + currHealth,
+		})
+	} else if !currBad && prevBad {
+		// Pool has recovered.
+		audit.Log(audit.Entry{
+			User:    "system",
+			Role:    "system",
+			Action:  audit.ActionPoolRecovered,
+			Target:  pool.Name,
+			Result:  audit.ResultOK,
+			Details: "pool health restored: " + currHealth,
+		})
+	}
+	healthEvPoolStates[pool.Name] = currHealth
+
+	// ── Per-member disk status ────────────────────────────────────────────────
+	prevStatuses := healthEvMemberStates[pool.Name]
+	for i, currStatus := range pool.MemberStatuses {
+		var prevStatus string
+		if i < len(prevStatuses) {
+			prevStatus = prevStatuses[i]
+		}
+		dev := ""
+		if i < len(pool.MemberDevices) && pool.MemberDevices[i] != "" {
+			dev = pool.MemberDevices[i]
+		} else if i < len(pool.Members) {
+			dev = pool.Members[i]
+		}
+		currDiskBad := currStatus != "ONLINE"
+		prevDiskBad := prevStatus != "ONLINE" && prevStatus != "" // empty = first run
+
+		if currDiskBad && prevStatus != currStatus {
+			audit.Log(audit.Entry{
+				User:    "system",
+				Role:    "system",
+				Action:  audit.ActionDiskProblem,
+				Target:  pool.Name,
+				Result:  audit.ResultError,
+				Details: dev + " status: " + currStatus,
+			})
+		} else if !currDiskBad && prevDiskBad {
+			audit.Log(audit.Entry{
+				User:    "system",
+				Role:    "system",
+				Action:  audit.ActionDiskRecovered,
+				Target:  pool.Name,
+				Result:  audit.ResultOK,
+				Details: dev + " recovered: ONLINE",
+			})
+		}
+	}
+	healthEvMemberStates[pool.Name] = append([]string{}, pool.MemberStatuses...)
+}
+
 // StartHealthPoller launches a background goroutine that checks pool health
-// and disk wearout every 5 minutes and fires alert emails on threshold breaches.
+// and disk wearout every 5 minutes, fires SMTP alert emails on threshold
+// breaches, and calls LogPoolHealthEvents for each pool to write audit entries.
 func StartHealthPoller(configDir string) {
 	go func() {
-		var lastPoolHealth string
 		lastWearoutAlerted := map[string]time.Time{}
-		lastSmartAlerted := map[string]time.Time{}
+		lastSmartAlerted   := map[string]time.Time{}
 
 		// Brief delay so the server is fully up before the first check.
 		time.Sleep(30 * time.Second)
-		runHealthCheck(&lastPoolHealth, lastWearoutAlerted, lastSmartAlerted, configDir)
+		runHealthCheck(lastWearoutAlerted, lastSmartAlerted, configDir)
 
 		tick := time.NewTicker(5 * time.Minute)
 		defer tick.Stop()
 		for range tick.C {
-			runHealthCheck(&lastPoolHealth, lastWearoutAlerted, lastSmartAlerted, configDir)
+			runHealthCheck(lastWearoutAlerted, lastSmartAlerted, configDir)
 		}
 	}()
 }
 
 func runHealthCheck(
-	lastPoolHealth *string,
 	lastWearoutAlerted map[string]time.Time,
-	lastSmartAlerted map[string]time.Time,
+	lastSmartAlerted   map[string]time.Time,
 	configDir string,
 ) {
 	cfg, err := alerts.Load()
@@ -101,11 +204,22 @@ func runHealthCheck(
 		return
 	}
 
-	// --- Pool health ---
-	if cfg.Events.PoolDegraded {
-		if pool, err := system.GetPool(); err == nil && pool != nil {
-			health := pool.Health
-			if (health == "DEGRADED" || health == "FAULTED") && *lastPoolHealth != health {
+	// --- Pool health + disk member status ---
+	pools, err := system.GetAllPools()
+	if err == nil {
+		for _, pool := range pools {
+			// Capture health before the LogPoolHealthEvents call for SMTP dedup.
+			healthEvMu.Lock()
+			prevSmtp := smtpLastPoolHealths[pool.Name]
+			healthEvMu.Unlock()
+
+			LogPoolHealthEvents(pool)
+
+			// SMTP alert for pool degradation — only when health changed to bad.
+			if cfg.Events.PoolDegraded && isBadPoolHealth(pool.Health) && prevSmtp != pool.Health {
+				healthEvMu.Lock()
+				smtpLastPoolHealths[pool.Name] = pool.Health
+				healthEvMu.Unlock()
 				go func(h, name string) {
 					if err := alerts.Send(
 						"Pool health: "+h,
@@ -114,9 +228,8 @@ func runHealthCheck(
 					); err != nil {
 						log.Printf("alerts: send failed: %v", err)
 					}
-				}(health, pool.Name)
+				}(pool.Health, pool.Name)
 			}
-			*lastPoolHealth = health
 		}
 	}
 

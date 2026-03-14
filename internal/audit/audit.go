@@ -63,6 +63,11 @@ const (
 	ActionCreateSchedule  = "create_schedule"
 	ActionUpdateSchedule  = "update_schedule"
 	ActionDeleteSchedule  = "delete_schedule"
+	// Health events — logged automatically by the background health poller.
+	ActionPoolProblem    = "pool_problem"
+	ActionPoolRecovered  = "pool_recovered"
+	ActionDiskProblem    = "disk_problem"
+	ActionDiskRecovered  = "disk_recovered"
 )
 
 var (

@@ -30,6 +30,11 @@ func buildDashboardKeys(db *rrd.DB) []string {
 	return keys
 }
 
+// HandleGetHardwareInfo returns static hardware properties (CPU cores, total RAM).
+func HandleGetHardwareInfo(w http.ResponseWriter, r *http.Request) {
+	jsonOK(w, system.GetHardwareInfo())
+}
+
 // HandleGetNetIfaces returns a map of external interface name → IPv4 address.
 func HandleGetNetIfaces(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, system.GetIfaceIPv4s())

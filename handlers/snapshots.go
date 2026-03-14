@@ -9,20 +9,43 @@ import (
 )
 
 func HandleListSnapshots(w http.ResponseWriter, r *http.Request) {
-	pool, err := system.GetPool()
-	if err != nil || pool == nil {
+	// If a specific pool is requested, return only its snapshots.
+	if name := strings.TrimSpace(r.URL.Query().Get("pool")); name != "" {
+		p, err := system.GetPoolByName(name)
+		if err != nil || p == nil {
+			jsonOK(w, []system.Snapshot{})
+			return
+		}
+		snaps, err := system.ListSnapshots(p.Name)
+		if err != nil {
+			jsonErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if snaps == nil {
+			snaps = []system.Snapshot{}
+		}
+		jsonOK(w, snaps)
+		return
+	}
+
+	// No pool specified — return snapshots from all pools combined.
+	pools, err := system.GetAllPools()
+	if err != nil || len(pools) == 0 {
 		jsonOK(w, []system.Snapshot{})
 		return
 	}
-	snaps, err := system.ListSnapshots(pool.Name)
-	if err != nil {
-		jsonErr(w, http.StatusInternalServerError, err.Error())
-		return
+	var all []system.Snapshot
+	for _, p := range pools {
+		snaps, err := system.ListSnapshots(p.Name)
+		if err != nil {
+			continue
+		}
+		all = append(all, snaps...)
 	}
-	if snaps == nil {
-		snaps = []system.Snapshot{}
+	if all == nil {
+		all = []system.Snapshot{}
 	}
-	jsonOK(w, snaps)
+	jsonOK(w, all)
 }
 
 func HandleCreateSnapshot(w http.ResponseWriter, r *http.Request) {

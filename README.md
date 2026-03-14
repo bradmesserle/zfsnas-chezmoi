@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go" alt="Go 1.22+"/>
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04%2B-E95420?style=flat-square&logo=ubuntu" alt="Ubuntu 22.04+"/>
   <img src="https://img.shields.io/badge/License-MIT-8a2cff?style=flat-square" alt="MIT License"/>
-  <img src="https://img.shields.io/badge/Version-2.0.0-00eaff?style=flat-square" alt="Version 2.0.0"/>
+  <img src="https://img.shields.io/badge/Version-4.0.0-00eaff?style=flat-square" alt="Version 4.0.0"/>
 </p>
 
 ## Why ZFS NAS Chezmoi?
@@ -28,28 +28,37 @@ Most NAS management software are slow to install, slow to load, and buried under
 ## Features
 
 ### Storage Management
-- **ZFS Pools** — create (Stripe / RAIDZ1 / RAIDZ2), import existing pools, expand, and destroy
-- **Datasets** — full nested hierarchy with quota, compression, and refquota options
-- **Snapshots** — create, restore, clone, and delete; visual tree per dataset
+- **Multi-Pool Support** — manage any number of ZFS pools side by side; switch between pools with a dropdown in the top bar and the Pool tab; last selection remembered per user across sessions
+- **ZFS Pools** — create (Stripe / Mirror / RAIDZ1 / RAIDZ2) with configurable ashift, compression, and dedup; import existing pools; expand with new devices; upgrade pool feature flags; destroy
+- **Pool Cache Devices** — add and remove ZFS L2ARC cache devices per pool via the ⚡ Cache Config modal
+- **Pool Fixer Wizard** — guided recovery for degraded, faulted, or suspended pools; automatically clears error state and brings offline disks back online in two steps
+- **Disk Online / Offline** — manually take individual pool member disks offline or bring them back online without leaving the portal
+- **Datasets** — full nested hierarchy with quota, refquota, reservation, record size, compression, sync, dedup, case sensitivity, and a free-text comment stored as a ZFS user property (`zfsnas:comment`)
+- **Snapshots** — create, restore, clone, and delete; visual tree per dataset; snapshot list spans all pools
 - **Scheduled Snapshots** — automated policies (hourly / daily / weekly / monthly) with configurable retention counts
-- **ZFS Scrub** — trigger, monitor progress, stop, and optionally schedule weekly scrubs
+- **ZFS Scrub** — trigger, monitor progress, stop, and optionally schedule weekly auto-scrubs
 
 ### File Sharing
 - **SMB Shares** — create and manage Samba shares with per-user read/write or read-only permissions
 - **NFS Shares** — Linux/macOS NFS exports with per-client CIDR and options (ro/rw, sync/async)
 
 ### Monitoring & Alerts
-- **Physical Disks** — list all non-system disks with vendor, model, type, and SMART wearout (ATA + NVMe), color-coded by health
-- **Pool Capacity Bar** — persistent capacity visualization at the top of every page, with per-dataset segments and hover tooltips
-- **System Dashboard** — live CPU, RAM, network (per interface), and ZFS disk I/O sparklines updated every 2 seconds
-- **Email Alerts** — SMTP-based notifications for pool degradation, SMART errors, disk wearout, failed logins, and more
+- **Physical Disks** — list all non-system disks with vendor, model, serial number, type, temperature, and SMART wearout (ATA + NVMe), color-coded by health
+- **Pool Member Status** — per-disk health state (ONLINE / FAULTED / OFFLINE / etc.) shown inline in the pool view; presence detection for disks that have been physically removed
+- **Pool Capacity Bar** — persistent capacity visualization at the top of every page with a pool selector when multiple pools are configured; per-dataset segments with hover tooltips
+- **System Dashboard** — 24-hour RRD charts for CPU, memory (app + cache stacked), network (per interface), and disk I/O; live sparklines updated every few seconds
+- **Hardware Info** — CPU core count and total RAM exposed via `/api/sysinfo/hardware`
+- **Email Alerts** — SMTP-based notifications for pool degradation, disk wearout, SMART errors, and failed logins; all pools monitored (not just the first)
+- **Audit Health Events** — pool problem / recovery and disk problem / recovery transitions are written to the audit log automatically by the background health poller
 
 ### Administration
-- **User Management** — three roles: `admin`, `read-only`, `smb-only`; active session listing and remote kill
-- **Audit Log** — append-only activity log with live sidebar widget and full log page (filterable by user, action, date)
+- **User Management** — three roles: `admin`, `read-only`, `smb-only`; active session listing and remote kill; per-user UI preferences (pool selection, sidebar state) persisted across sessions
+- **Audit Log** — append-only activity log with live sidebar widget and full log page (filterable by user, action, date); covers storage, sharing, auth, OS, and health events
 - **Web Terminal** — browser-based PTY terminal (admin only), powered by xterm.js over WebSocket
-- **Ubuntu Updates** — check for and stream-apply `apt` security updates from the portal
-- **Settings** — configure port, storage units (GB / GiB), SMTP, and alert subscriptions
+- **OS Updates** — check for and stream-apply `apt` security updates from the portal
+- **Binary Self-Update** — check for a newer release and apply it in-place over WebSocket with live progress output
+- **Timezone Management** — set system timezone from the portal; falls back to `/usr/share/zoneinfo/` on minimal installs without `timedatectl`
+- **Settings** — configure port, storage units (GB / GiB), SMTP, alert subscriptions, and read-only API key
 
 ---
 

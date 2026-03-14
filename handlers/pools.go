@@ -5,12 +5,45 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 	"zfsnas/internal/audit"
 	"zfsnas/system"
 )
 
+// poolCreateJob tracks an async pool creation.
+type poolCreateJob struct {
+	mu     sync.Mutex
+	Status string      `json:"status"` // "running" | "done" | "error"
+	Pool   *system.Pool `json:"pool,omitempty"`
+	Error  string      `json:"error,omitempty"`
+}
+
+var poolCreateJobs sync.Map // key: string job ID → *poolCreateJob
+
+func HandleGetPools(w http.ResponseWriter, r *http.Request) {
+	pools, err := system.GetAllPools()
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if pools == nil {
+		pools = []*system.Pool{}
+	}
+	jsonOK(w, pools)
+}
+
 func HandleGetPool(w http.ResponseWriter, r *http.Request) {
-	pool, err := system.GetPool()
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	var (
+		pool *system.Pool
+		err  error
+	)
+	if name != "" {
+		pool, err = system.GetPoolByName(name)
+	} else {
+		pool, err = system.GetPool()
+	}
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -48,7 +81,7 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 	}
 	validAshift := map[int]bool{9: true, 12: true, 13: true}
 	if !validAshift[req.Ashift] {
-		req.Ashift = 12 // default to 4K
+		req.Ashift = 12
 	}
 	if req.Compression == "" {
 		req.Compression = "lz4"
@@ -57,8 +90,6 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 	if !validDedup[req.Dedup] {
 		req.Dedup = "off"
 	}
-
-	// Validate minimum device count for layouts.
 	min := map[string]int{"stripe": 1, "mirror": 2, "raidz1": 3, "raidz2": 4}
 	if len(req.Devices) < min[req.Layout] {
 		jsonErr(w, http.StatusBadRequest,
@@ -66,28 +97,59 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := system.CreatePool(req.Name, req.Layout, req.Ashift, req.Compression, req.Dedup, req.Devices); err != nil {
-		jsonErr(w, http.StatusInternalServerError, err.Error())
+	sess := MustSession(r)
+	jobID := fmt.Sprintf("%d", time.Now().UnixNano())
+	job := &poolCreateJob{Status: "running"}
+	poolCreateJobs.Store(jobID, job)
+
+	go func() {
+		err := system.CreatePool(req.Name, req.Layout, req.Ashift, req.Compression, req.Dedup, req.Devices)
+		job.mu.Lock()
+		defer job.mu.Unlock()
+		if err != nil {
+			job.Status = "error"
+			job.Error = err.Error()
+			audit.Log(audit.Entry{
+				User: sess.Username, Role: sess.Role,
+				Action: audit.ActionCreatePool, Target: req.Name, Result: audit.ResultError,
+				Details: err.Error(),
+			})
+			return
+		}
+		diskCacheStale = true
+		pool, _ := system.GetPoolByName(req.Name)
+		job.Pool = pool
+		job.Status = "done"
+		audit.Log(audit.Entry{
+			User: sess.Username, Role: sess.Role,
+			Action:  audit.ActionCreatePool,
+			Target:  req.Name,
+			Result:  audit.ResultOK,
+			Details: req.Layout + " ashift=" + string(rune('0'+req.Ashift)) + " compression=" + req.Compression + " dedup=" + req.Dedup,
+		})
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"job_id": jobID})
+}
+
+func HandlePoolCreateStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	val, ok := poolCreateJobs.Load(id)
+	if !ok {
+		jsonErr(w, http.StatusNotFound, "job not found")
 		return
 	}
-	diskCacheStale = true
-
-	sess := MustSession(r)
-	audit.Log(audit.Entry{
-		User:    sess.Username,
-		Role:    sess.Role,
-		Action:  audit.ActionCreatePool,
-		Target:  req.Name,
-		Result:  audit.ResultOK,
-		Details: req.Layout + " ashift=" + string(rune('0'+req.Ashift)) + " compression=" + req.Compression + " dedup=" + req.Dedup,
-	})
-
-	pool, _ := system.GetPool()
-	jsonCreated(w, pool)
+	job := val.(*poolCreateJob)
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	jsonOK(w, job)
 }
 
 func HandleSetPoolProperties(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		Pool        string `json:"pool"`
 		Compression string `json:"compression"`
 		Dedup       string `json:"dedup"`
 		Sync        string `json:"sync"`
@@ -97,7 +159,14 @@ func HandleSetPoolProperties(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	pool, err := system.GetPool()
+	req.Pool = strings.TrimSpace(req.Pool)
+	var pool *system.Pool
+	var err error
+	if req.Pool != "" {
+		pool, err = system.GetPoolByName(req.Pool)
+	} else {
+		pool, err = system.GetPool()
+	}
 	if err != nil || pool == nil {
 		jsonErr(w, http.StatusBadRequest, "no pool available")
 		return
@@ -145,12 +214,13 @@ func HandleSetPoolProperties(w http.ResponseWriter, r *http.Request) {
 		Details: strings.Join(parts, " "),
 	})
 
-	updated, _ := system.GetPool()
+	updated, _ := system.GetPoolByName(pool.Name)
 	jsonOK(w, updated)
 }
 
 func HandlePoolStatus(w http.ResponseWriter, r *http.Request) {
-	out, err := system.GetPoolStatus()
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	out, err := system.GetPoolStatusByName(name)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -176,6 +246,7 @@ func HandleGetZFSVersion(w http.ResponseWriter, r *http.Request) {
 
 func HandleGrowPool(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		Pool    string   `json:"pool"`
 		Devices []string `json:"devices"`
 		Mode    string   `json:"mode"` // "expand" | "stripe" | "mirror" | "raidz1" | "raidz2"
 	}
@@ -195,7 +266,14 @@ func HandleGrowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pool, err := system.GetPool()
+	req.Pool = strings.TrimSpace(req.Pool)
+	var pool *system.Pool
+	var err error
+	if req.Pool != "" {
+		pool, err = system.GetPoolByName(req.Pool)
+	} else {
+		pool, err = system.GetPool()
+	}
 	if err != nil || pool == nil {
 		jsonErr(w, http.StatusBadRequest, "no pool available")
 		return
@@ -226,7 +304,7 @@ func HandleGrowPool(w http.ResponseWriter, r *http.Request) {
 		Details: fmt.Sprintf("mode=%s devices=%s", req.Mode, strings.Join(req.Devices, ", ")),
 	})
 
-	updated, _ := system.GetPool()
+	updated, _ := system.GetPoolByName(pool.Name)
 	jsonOK(w, updated)
 }
 
@@ -244,13 +322,9 @@ func HandleDestroyPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pool, err := system.GetPool()
+	pool, err := system.GetPoolByName(req.Name)
 	if err != nil || pool == nil {
-		jsonErr(w, http.StatusBadRequest, "no pool available")
-		return
-	}
-	if pool.Name != req.Name {
-		jsonErr(w, http.StatusBadRequest, "pool name does not match")
+		jsonErr(w, http.StatusBadRequest, "pool not found")
 		return
 	}
 
@@ -272,7 +346,18 @@ func HandleDestroyPool(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleUpgradePool(w http.ResponseWriter, r *http.Request) {
-	pool, err := system.GetPool()
+	var req struct {
+		Pool string `json:"pool"`
+	}
+	json.NewDecoder(r.Body).Decode(&req) // pool field is optional
+	req.Pool = strings.TrimSpace(req.Pool)
+	var pool *system.Pool
+	var err error
+	if req.Pool != "" {
+		pool, err = system.GetPoolByName(req.Pool)
+	} else {
+		pool, err = system.GetPool()
+	}
 	if err != nil || pool == nil {
 		jsonErr(w, http.StatusBadRequest, "no pool configured")
 		return
@@ -294,6 +379,7 @@ func HandleUpgradePool(w http.ResponseWriter, r *http.Request) {
 
 func HandleAddPoolCache(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		Pool   string `json:"pool"`
 		Device string `json:"device"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -305,7 +391,14 @@ func HandleAddPoolCache(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "device is required")
 		return
 	}
-	pool, err := system.GetPool()
+	req.Pool = strings.TrimSpace(req.Pool)
+	var pool *system.Pool
+	var err error
+	if req.Pool != "" {
+		pool, err = system.GetPoolByName(req.Pool)
+	} else {
+		pool, err = system.GetPool()
+	}
 	if err != nil || pool == nil {
 		jsonErr(w, http.StatusBadRequest, "no pool available")
 		return
@@ -324,12 +417,13 @@ func HandleAddPoolCache(w http.ResponseWriter, r *http.Request) {
 		Result:  audit.ResultOK,
 		Details: "add cache " + req.Device,
 	})
-	updated, _ := system.GetPool()
+	updated, _ := system.GetPoolByName(pool.Name)
 	jsonOK(w, updated)
 }
 
 func HandleRemovePoolCache(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		Pool   string `json:"pool"`
 		Device string `json:"device"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -341,7 +435,14 @@ func HandleRemovePoolCache(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "device is required")
 		return
 	}
-	pool, err := system.GetPool()
+	req.Pool = strings.TrimSpace(req.Pool)
+	var pool *system.Pool
+	var err error
+	if req.Pool != "" {
+		pool, err = system.GetPoolByName(req.Pool)
+	} else {
+		pool, err = system.GetPool()
+	}
 	if err != nil || pool == nil {
 		jsonErr(w, http.StatusBadRequest, "no pool available")
 		return
@@ -360,7 +461,7 @@ func HandleRemovePoolCache(w http.ResponseWriter, r *http.Request) {
 		Result:  audit.ResultOK,
 		Details: "remove cache " + req.Device,
 	})
-	updated, _ := system.GetPool()
+	updated, _ := system.GetPoolByName(pool.Name)
 	jsonOK(w, updated)
 }
 
@@ -409,6 +510,144 @@ func HandleImportPool(w http.ResponseWriter, r *http.Request) {
 		Result: audit.ResultOK,
 	})
 
-	pool, _ := system.GetPool()
+	pool, _ := system.GetPoolByName(req.Name)
+	jsonOK(w, pool)
+}
+
+// HandleClearPool runs `zpool clear` on the specified pool to clear errors and
+// bring a SUSPENDED pool back online when its disks have recovered.
+func HandleClearPool(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Pool string `json:"pool"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Pool = strings.TrimSpace(req.Pool)
+	if req.Pool == "" {
+		jsonErr(w, http.StatusBadRequest, "pool is required")
+		return
+	}
+	if err := system.ClearPool(req.Pool); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:   sess.Username,
+		Role:   sess.Role,
+		Action: audit.ActionImportPool,
+		Target: req.Pool,
+		Result: audit.ResultOK,
+		Details: "zpool clear (pool fixer)",
+	})
+	pool, _ := system.GetPoolByName(req.Pool)
+	LogPoolHealthEvents(pool)
+	jsonOK(w, pool)
+}
+
+// HandlePoolFixerOnline handles the "bring offline disks back online" step of the Pool Fixer Wizard.
+// The pool is SUSPENDED, so we must clear it first (resumes I/O), then bring the disks online.
+func HandlePoolFixerOnline(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Pool    string   `json:"pool"`
+		Devices []string `json:"devices"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Pool = strings.TrimSpace(req.Pool)
+	if req.Pool == "" || len(req.Devices) == 0 {
+		jsonErr(w, http.StatusBadRequest, "pool and devices are required")
+		return
+	}
+	// Step 1: clear the suspended state first — zpool online cannot run while I/O is suspended.
+	if err := system.ClearPool(req.Pool); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "zpool clear failed: "+err.Error())
+		return
+	}
+	// Step 2: bring the recovered disks back online.
+	if err := system.OnlinePoolDisks(req.Pool, req.Devices); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "zpool online failed: "+err.Error())
+		return
+	}
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionUpdatePool,
+		Target:  req.Pool,
+		Result:  audit.ResultOK,
+		Details: "pool fixer: zpool clear; zpool online " + strings.Join(req.Devices, " "),
+	})
+	pool, _ := system.GetPoolByName(req.Pool)
+	LogPoolHealthEvents(pool)
+	jsonOK(w, pool)
+}
+
+func HandleDiskOffline(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Pool   string `json:"pool"`
+		Device string `json:"device"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Pool   = strings.TrimSpace(req.Pool)
+	req.Device = strings.TrimSpace(req.Device)
+	if req.Pool == "" || req.Device == "" {
+		jsonErr(w, http.StatusBadRequest, "pool and device are required")
+		return
+	}
+	if err := system.SetDiskOffline(req.Pool, req.Device); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionUpdatePool,
+		Target:  req.Pool,
+		Result:  audit.ResultOK,
+		Details: "disk offline: " + req.Device,
+	})
+	pool, _ := system.GetPoolByName(req.Pool)
+	jsonOK(w, pool)
+}
+
+func HandleDiskOnline(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Pool   string `json:"pool"`
+		Device string `json:"device"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Pool   = strings.TrimSpace(req.Pool)
+	req.Device = strings.TrimSpace(req.Device)
+	if req.Pool == "" || req.Device == "" {
+		jsonErr(w, http.StatusBadRequest, "pool and device are required")
+		return
+	}
+	if err := system.SetDiskOnline(req.Pool, req.Device); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionUpdatePool,
+		Target:  req.Pool,
+		Result:  audit.ResultOK,
+		Details: "disk online: " + req.Device,
+	})
+	pool, _ := system.GetPoolByName(req.Pool)
+	LogPoolHealthEvents(pool)
 	jsonOK(w, pool)
 }

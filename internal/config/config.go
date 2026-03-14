@@ -26,7 +26,9 @@ type AppConfig struct {
 
 // UserPreferences holds per-user UI preferences persisted across sessions.
 type UserPreferences struct {
-	ActivityBarCollapsed bool `json:"activity_bar_collapsed,omitempty"`
+	ActivityBarCollapsed bool   `json:"activity_bar_collapsed,omitempty"`
+	SelectedPool         string `json:"selected_pool,omitempty"`          // last pool shown in Pool tab
+	SelectedTopBarPool   string `json:"selected_top_bar_pool,omitempty"`  // last pool shown in top bar
 }
 
 // User represents a portal or SMB-only user.

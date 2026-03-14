@@ -67,10 +67,14 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(http.HandlerFunc(HandleAuditLog))).Methods("GET")
 
 	// --- Pool ---
+	r.Handle("/api/pools",
+		RequireAuth(http.HandlerFunc(HandleGetPools))).Methods("GET")
 	r.Handle("/api/pool",
 		RequireAuth(http.HandlerFunc(HandleGetPool))).Methods("GET")
 	r.Handle("/api/pool",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCreatePool)))).Methods("POST")
+	r.Handle("/api/pool/create-status",
+		RequireAuth(http.HandlerFunc(HandlePoolCreateStatus))).Methods("GET")
 	r.Handle("/api/pool/detect",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDetectPools)))).Methods("GET")
 	r.Handle("/api/pool/import",
@@ -89,6 +93,14 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleAddPoolCache)))).Methods("POST")
 	r.Handle("/api/pool/cache",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleRemovePoolCache)))).Methods("DELETE")
+	r.Handle("/api/pool/clear",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleClearPool)))).Methods("POST")
+	r.Handle("/api/pool/fixer/online",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandlePoolFixerOnline)))).Methods("POST")
+	r.Handle("/api/pool/disk/offline",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDiskOffline)))).Methods("POST")
+	r.Handle("/api/pool/disk/online",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDiskOnline)))).Methods("POST")
 	r.Handle("/api/pool/settings",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSetPoolProperties)))).Methods("PUT")
 
@@ -217,6 +229,10 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 	// --- Disk I/O metrics ---
 	r.Handle("/api/sysinfo/diskio",
 		RequireAuth(http.HandlerFunc(HandleGetDiskIO))).Methods("GET")
+
+	// --- Hardware info ---
+	r.Handle("/api/sysinfo/hardware",
+		RequireAuth(http.HandlerFunc(HandleGetHardwareInfo))).Methods("GET")
 
 	// --- Version ---
 	r.Handle("/api/version",

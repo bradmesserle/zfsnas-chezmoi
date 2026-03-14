@@ -17,12 +17,7 @@ func poolFromAny(name string) string {
 }
 
 func HandleListDatasets(w http.ResponseWriter, r *http.Request) {
-	pool, err := system.GetPool()
-	if err != nil || pool == nil {
-		jsonOK(w, []system.Dataset{})
-		return
-	}
-	datasets, err := system.ListDatasets(pool.Name)
+	datasets, err := system.ListAllDatasets()
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return

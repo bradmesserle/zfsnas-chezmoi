@@ -94,7 +94,7 @@
       display: none; /* shown only when a pool is present */
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 10px 20px 8px;
+      padding: 6px 16px 8px;
       gap: 12px;
       flex-direction: row;
       align-items: flex-end;
@@ -151,34 +151,30 @@
       position: relative; flex-shrink: 0; vertical-align: middle;
       user-select: none;
     }
+    body.light .info-tip { background: rgba(0,0,0,0.10); color: #9a9a9e; }
     .info-tip::before { content: 'i'; }
-    .info-tip::after {
-      content: attr(data-tip);
-      position: absolute;
-      bottom: calc(100% + 8px);
-      left: 50%; transform: translateX(-50%);
-      min-width: 220px; max-width: 300px;
+    /* Floating tooltip rendered via JS into #tip-box — escapes overflow:hidden containers */
+    #tip-box {
+      position: fixed;
+      min-width: 220px; max-width: 320px;
       background: #1c1c1e;
-      border: 1px solid var(--border);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 8px;
       padding: 10px 14px;
       font-size: 12px; font-weight: 400; font-style: normal;
       line-height: 1.55; white-space: pre-wrap;
-      color: #ffffff;
-      text-transform: none; letter-spacing: 0;
+      color: #fff;
       pointer-events: none;
-      z-index: 200;
-      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      z-index: 9999;
+      box-shadow: 0 8px 24px rgba(0,0,0,.55);
       opacity: 0; transition: opacity .15s;
+      text-transform: none; letter-spacing: 0;
     }
-    .info-tip:hover::after { opacity: 1; }
-    /* when near right edge, open left */
-    .info-tip.tip-left::after { left: auto; right: 0; transform: none; }
-    /* when near bottom, open downward */
-    .info-tip.tip-down::after { bottom: auto; top: calc(100% + 8px); }
+    #tip-box.tip-visible { opacity: 1; }
   </style>
 </head>
 <body>
+<div id="tip-box"></div>
 <div class="app-layout" id="app">
 
   <!-- ===== SIDEBAR ===== -->
@@ -201,13 +197,13 @@
 
     <div class="sidebar-section">Storage</div>
     <button class="nav-item" onclick="showPage('disks')"     id="nav-disks">    <span class="nav-icon">💿</span><span class="nav-label"> Physical Disks</span></button>
-    <button class="nav-item" onclick="showPage('pool')"      id="nav-pool">     <span class="nav-icon">🗄</span><span class="nav-label"> ZFS Pool</span></button>
+    <button class="nav-item" onclick="showPage('pool')"      id="nav-pool">     <span class="nav-icon">🗄</span><span class="nav-label"> ZFS Pool</span><span id="nav-pool-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
     <button class="nav-item" onclick="showPage('datasets')"  id="nav-datasets"> <span class="nav-icon">📁</span><span class="nav-label"> Datasets</span></button>
     <button class="nav-item" onclick="showPage('snapshots')" id="nav-snapshots"><span class="nav-icon">📸</span><span class="nav-label"> Snapshots</span></button>
 
     <div class="sidebar-section">Sharing</div>
-    <button class="nav-item" onclick="showPage('shares')"    id="nav-shares">   <span class="nav-icon">🔗</span><span class="nav-label"> SMB Shares</span></button>
-    <button class="nav-item" onclick="showPage('nfs')"       id="nav-nfs">      <span class="nav-icon">🌐</span><span class="nav-label"> NFS Shares</span></button>
+    <button class="nav-item" onclick="showPage('shares')"    id="nav-shares">   <span class="nav-icon">🔗</span><span class="nav-label"> SMB Shares</span><span id="nav-smb-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
+    <button class="nav-item" onclick="showPage('nfs')"       id="nav-nfs">      <span class="nav-icon">🌐</span><span class="nav-label"> NFS Shares</span><span id="nav-nfs-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
 
     <div class="sidebar-section">System</div>
     <button class="nav-item" onclick="showPage('users')"     id="nav-users">    <span class="nav-icon">👤</span><span class="nav-label"> Users</span></button>
@@ -224,14 +220,14 @@
     <!-- Top bar: pool capacity -->
     <div class="topbar">
       <div class="topbar-inner">
-        <span class="topbar-title">Pool Capacity</span>
-        <span id="pool-summary" class="text-sm text-2"></span>
-        <div style="display:flex;align-items:center;gap:2px;margin-left:auto;">
+        <span id="topbar-pool-title" class="topbar-title">Pool Capacity</span>
+        <span id="pool-summary" class="text-sm text-2" style="text-align:center;"></span>
+        <div style="display:flex;align-items:center;gap:2px;justify-self:end;">
           <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
             <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
             <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
-          <button onclick="showPage('activity')" id="nav-activity" title="Activity Log" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+          <button onclick="showPage('activity')" id="nav-activity" title="Activity &amp; Events" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           </button>
           <button onclick="logout()" title="Sign Out" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
@@ -268,7 +264,6 @@
 
       <!-- DASHBOARD -->
       <div class="page" id="page-dashboard">
-        <div class="page-header"><h2>Dashboard</h2></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;">
           <div class="card-sm">
             <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Pool Status</div>
@@ -301,6 +296,7 @@
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);">CPU Usage (24h)</div>
                 <div style="display:flex;align-items:center;gap:8px;">
+                  <span id="dash-hw-cpu" style="font-size:11px;color:var(--text-3);"></span>
                   <span id="dash-max-cpu" style="font-size:11px;color:var(--text-3);"></span>
                   <i class="info-tip tip-left" data-tip="% of total CPU time used across all cores.&#10;Source: /proc/stat (user + system + nice + irq…).&#10;Two readings 500 ms apart every 5 min; iowait excluded."></i>
                 </div>
@@ -311,6 +307,7 @@
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);">Memory Usage (24h)</div>
                 <div style="display:flex;align-items:center;gap:8px;">
+                  <span id="dash-hw-mem" style="font-size:11px;color:var(--text-3);"></span>
                   <span id="dash-max-mem" style="font-size:11px;color:var(--text-3);"></span>
                   <i class="info-tip tip-left" data-tip="Stacked RAM usage from /proc/meminfo, sampled every 5 min.&#10;&#10;App (blue): memory held by processes&#10;  = MemTotal − MemFree − Buffers − Cached&#10;&#10;Cache (purple): Linux page cache + buffers&#10;  — re-usable; reclaimed on demand."></i>
                 </div>
@@ -441,7 +438,7 @@
       <!-- FULL ACTIVITY LOG PAGE -->
       <div class="page hidden" id="page-activity">
         <div class="page-header">
-          <h2>Activity Log</h2>
+          <h2>Activity &amp; Events</h2>
           <button class="btn btn-ghost btn-sm" onclick="loadAudit()">↻ Refresh</button>
         </div>
         <div class="card" id="activity-list">
@@ -466,7 +463,7 @@
       <!-- ZFS POOL -->
       <div class="page hidden" id="page-pool">
         <div class="page-header">
-          <h2>ZFS Pool</h2>
+          <h2 id="pool-page-title">ZFS Pool</h2>
           <div id="pool-header-actions" style="display:flex;gap:8px;"></div>
         </div>
         <div id="pool-content"><div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div></div>
@@ -785,7 +782,7 @@
     <div class="activity-bar expanded" id="activity-bar">
       <div class="activity-bar-header" onclick="toggleActivityBar()">
         <span style="font-size:13px;">📋</span>
-        <span class="activity-bar-title">Activity</span>
+        <span class="activity-bar-title">Activity &amp; Events</span>
         <span id="ab-jobs-badge" class="badge badge-ok hidden" style="font-size:10px;"></span>
         <div style="flex:1"></div>
         <span id="ab-chevron" style="color:var(--text-3);font-size:11px;transition:transform .2s;transform:rotate(180deg);">▲</span>
@@ -835,6 +832,55 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAddDisksModal()">Cancel</button>
       <button class="btn btn-primary" onclick="submitAddDisks()" id="btn-add-disks-submit">Add to Pool</button>
+    </div>
+  </div>
+</div>
+
+<!-- Force Disk Offline Modal -->
+<div class="modal-backdrop hidden" id="modal-disk-offline">
+  <div class="modal" style="max-width:460px;border:1px solid var(--accent-warn);">
+    <div class="modal-header" style="background:rgba(255,159,10,0.08);border-bottom:1px solid var(--accent-warn);">
+      <h3 style="color:var(--accent-warn);">⚠ Force Disk Offline</h3>
+      <button class="modal-close" onclick="closeDiskOfflineModal()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="alert alert-error hidden" id="disk-offline-alert"></div>
+      <p style="font-size:14px;color:var(--text-1);">You are about to take disk <strong id="disk-offline-name" style="font-family:monospace;"></strong> offline in pool <strong id="disk-offline-pool" style="font-family:monospace;"></strong>.</p>
+      <div style="font-size:13px;color:var(--text-2);background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;line-height:1.6;">
+        <strong>When to use this:</strong><br>
+        • Replacing a failing or degraded disk without shutting down the server.<br>
+        • Temporarily removing a disk for maintenance while the pool remains online.<br>
+        • The pool must have enough redundancy (mirror, RAIDZ) to tolerate the missing disk.
+      </div>
+      <div style="font-size:13px;color:var(--accent-warn);font-weight:600;">
+        ⚠ A striped pool (no redundancy) will become DEGRADED and data may be inaccessible. Only proceed if you understand the consequences.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDiskOfflineModal()">Cancel</button>
+      <button class="btn" id="btn-disk-offline-confirm"
+        style="background:var(--accent-warn);color:#000;font-weight:600;"
+        onclick="submitDiskOffline()">Force Offline</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pool Fixer Wizard Modal -->
+<div class="modal-backdrop hidden" id="modal-pool-fixer">
+  <div class="modal" style="max-width:500px;border:1px solid #6e40c9;background:var(--surface);">
+    <div class="modal-header" style="background:linear-gradient(135deg,rgba(110,64,201,0.15) 0%,rgba(45,125,210,0.12) 50%,rgba(13,187,189,0.10) 100%);border-bottom:1px solid #6e40c9;">
+      <h3 style="background:linear-gradient(135deg,#a78bfa,#60a5fa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">✦ Pool Fixer Wizard</h3>
+      <button class="modal-close" onclick="closePoolFixerWizard()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:16px;">
+      <div class="alert alert-error hidden" id="pool-fixer-alert"></div>
+      <div id="pool-fixer-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePoolFixerWizard()">Cancel</button>
+      <button class="btn" id="btn-pool-fixer-fix"
+        style="background:linear-gradient(135deg,#6e40c9 0%,#2d7dd2 50%,#0dbbbd 100%);color:#fff;border:none;font-weight:600;box-shadow:0 0 10px rgba(110,64,201,0.4);"
+        onclick="submitPoolFixer()">✦ Fix Now</button>
     </div>
   </div>
 </div>
@@ -923,6 +969,66 @@
       <button class="btn" id="btn-force-import-confirm"
         style="background:#ff9f0a;color:#000;opacity:.4;cursor:not-allowed;"
         disabled onclick="submitForceImport()">Force Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import ZFS Pool Modal -->
+<div class="modal-backdrop hidden" id="modal-import-pool">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>⬇ Import ZFS Pool</h3>
+      <button class="modal-close" onclick="closeImportPoolModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error hidden" id="import-pool-alert"></div>
+      <div id="import-pool-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeImportPoolModal()">Cancel</button>
+      <button class="btn btn-primary" id="btn-import-pool-confirm" onclick="submitImportPool()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Snapshot Confirm Modal -->
+<div class="modal-backdrop hidden" id="modal-delete-snapshot">
+  <div class="modal" style="max-width:420px;border:1px solid var(--accent-danger);">
+    <div class="modal-header" style="background:rgba(255,59,48,0.08);border-bottom:1px solid var(--accent-danger);">
+      <h3 style="color:var(--accent-danger);">⚠ Delete Snapshot</h3>
+      <button class="modal-close" onclick="closeDeleteSnapshotModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error hidden" id="delete-snapshot-alert"></div>
+      <p style="font-size:14px;color:var(--text-1);margin-bottom:6px;">Delete snapshot <strong id="delete-snapshot-name" style="font-family:monospace;font-size:13px;word-break:break-all;"></strong>?</p>
+      <p style="font-size:13px;color:var(--text-3);">This permanently removes the snapshot. This cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeleteSnapshotModal()">Cancel</button>
+      <button class="btn" id="btn-delete-snapshot-confirm"
+        style="background:var(--accent-danger);color:#fff;"
+        onclick="confirmDeleteSnapshot()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Dataset Confirm Modal -->
+<div class="modal-backdrop hidden" id="modal-delete-dataset">
+  <div class="modal" style="max-width:420px;border:1px solid var(--accent-danger);">
+    <div class="modal-header" style="background:rgba(255,59,48,0.08);border-bottom:1px solid var(--accent-danger);">
+      <h3 style="color:var(--accent-danger);">⚠ Delete Dataset</h3>
+      <button class="modal-close" onclick="closeDeleteDatasetModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error hidden" id="delete-dataset-alert"></div>
+      <p style="font-size:14px;color:var(--text-1);margin-bottom:6px;">Delete dataset <strong id="delete-dataset-name" style="font-family:monospace;"></strong>?</p>
+      <p style="font-size:13px;color:var(--text-3);">This permanently destroys the dataset and all its data. This cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeleteDatasetModal()">Cancel</button>
+      <button class="btn" id="btn-delete-dataset-confirm"
+        style="background:var(--accent-danger);color:#fff;"
+        onclick="confirmDeleteDataset()">Delete</button>
     </div>
   </div>
 </div>
@@ -1731,15 +1837,23 @@
         </label>
       </div>
 
-      <!-- Allowed Hosts / Hosts Deny -->
-      <div class="form-group">
-        <label>Allowed Hosts <span class="text-3 text-xs">(optional)</span> <i class="info-tip" data-tip="Space-separated list of IP addresses, hostnames, or subnets (CIDR) allowed to access this share. Leave empty to allow all. Example: 192.168.1.0/24 10.0.0.5"></i></label>
-        <input type="text" id="share-allowed-hosts" placeholder="192.168.1.0/24 10.0.0.5" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Hosts Deny <span class="text-3 text-xs">(optional)</span> <i class="info-tip" data-tip="Space-separated list of IP addresses, hostnames, or subnets explicitly denied access to this share."></i></label>
-        <input type="text" id="share-hosts-deny" placeholder="10.0.1.0/24" autocomplete="off">
-      </div>
+      <!-- Advanced Settings (collapsed) -->
+      <details style="margin-bottom:12px;">
+        <summary style="cursor:pointer;font-size:13px;color:var(--text-2);user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
+          <span id="share-adv-arrow" style="font-size:10px;transition:transform .15s;">▶</span>
+          Advanced Security (optional)
+        </summary>
+        <div style="margin-top:10px;padding-left:4px;">
+          <div class="form-group">
+            <label>Allowed Hosts <span class="text-3 text-xs">(optional)</span> <i class="info-tip" data-tip="Space-separated list of IP addresses, hostnames, or subnets (CIDR) allowed to access this share. Leave empty to allow all. Example: 192.168.1.0/24 10.0.0.5"></i></label>
+            <input type="text" id="share-allowed-hosts" placeholder="192.168.1.0/24 10.0.0.5" autocomplete="off">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Hosts Deny <span class="text-3 text-xs">(optional)</span> <i class="info-tip" data-tip="Space-separated list of IP addresses, hostnames, or subnets explicitly denied access to this share."></i></label>
+            <input type="text" id="share-hosts-deny" placeholder="10.0.1.0/24" autocomplete="off">
+          </div>
+        </div>
+      </details>
 
       <div class="flex gap-2" style="margin-top:8px;padding-bottom:4px;">
         <button type="button" class="btn btn-ghost" onclick="closeShareModal()">Cancel</button>
@@ -1835,6 +1949,27 @@
         </button>
       </div>
       <div id="service-install-result" class="hidden" style="margin-top:10px;font-size:13px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Share Confirm Modal (SMB + NFS) -->
+<div class="modal-backdrop hidden" id="modal-delete-share">
+  <div class="modal" style="max-width:420px;border:1px solid var(--accent-danger);">
+    <div class="modal-header" style="background:rgba(255,59,48,0.08);border-bottom:1px solid var(--accent-danger);">
+      <h3 style="color:var(--accent-danger);">⚠ Delete Share</h3>
+      <button class="modal-close" onclick="closeDeleteShareModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-error hidden" id="delete-share-alert"></div>
+      <p style="font-size:14px;color:var(--text-1);margin-bottom:6px;">Remove share <strong id="delete-share-name" style="font-family:monospace;"></strong>?</p>
+      <p style="font-size:13px;color:var(--text-3);">This removes network access only — no data will be deleted.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeleteShareModal()">Cancel</button>
+      <button class="btn" id="btn-delete-share-confirm"
+        style="background:var(--accent-danger);color:#fff;"
+        onclick="confirmDeleteShare()">Delete</button>
     </div>
   </div>
 </div>
@@ -2181,9 +2316,11 @@ let _dashCharts      = {};
   showPage('dashboard');
   startActivityBarRefresh();
   checkPrereqsBanner();
-  refreshPoolBar();
+  await refreshPoolBar();
+  updateServiceNavDots();
   // Refresh pool bar every 60s.
   setInterval(refreshPoolBar, 60000);
+  setInterval(updateServiceNavDots, 60000);
   startIOPoller();
 })();
 
@@ -2304,18 +2441,36 @@ function renderActivityBar(entries) {
     return;
   }
   const recent = [...entries].reverse().slice(0, 15);
-  entriesEl.innerHTML = recent.map(e => `
-    <div class="ab-row">
+  entriesEl.innerHTML = recent.map(e => {
+    const ev = _auditEventMeta(e);
+    return `
+    <div class="ab-row" style="${ev.rowStyle}">
       <span class="ab-time">${shortTime(e.timestamp)}</span>
-      <span class="ab-icon">${e.result === 'ok' ? '✅' : '❌'}</span>
+      <span class="ab-icon">${ev.icon}</span>
       <span>
-        <span class="ab-user">${esc(e.user)}</span>
-        <span class="ab-action"> ${esc(e.action.replace(/_/g,' '))}</span>
+        ${ev.isSystem ? '' : `<span class="ab-user">${esc(e.user)}</span>`}
+        <span class="ab-action" style="${ev.labelStyle}"> ${ev.label}</span>
         ${e.target ? `<span class="ab-target"> → ${esc(e.target)}</span>` : ''}
         ${e.details ? `<span class="ab-target"> (${esc(e.details)})</span>` : ''}
       </span>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+}
+
+// Returns display metadata for an audit entry based on its action type.
+function _auditEventMeta(e) {
+  switch (e.action) {
+    case 'pool_problem':
+      return { icon:'🔴', label:'Pool problem detected', labelStyle:'color:var(--accent-danger);font-weight:600;', rowStyle:'border-left:2px solid var(--accent-danger);padding-left:6px;', isSystem:true };
+    case 'pool_recovered':
+      return { icon:'🟢', label:'Pool recovered', labelStyle:'color:var(--accent-3);font-weight:600;', rowStyle:'border-left:2px solid var(--accent-3);padding-left:6px;', isSystem:true };
+    case 'disk_problem':
+      return { icon:'🟠', label:'Disk problem detected', labelStyle:'color:#f0b429;font-weight:600;', rowStyle:'border-left:2px solid #f0b429;padding-left:6px;', isSystem:true };
+    case 'disk_recovered':
+      return { icon:'🟢', label:'Disk recovered', labelStyle:'color:var(--accent-3);font-weight:600;', rowStyle:'border-left:2px solid var(--accent-3);padding-left:6px;', isSystem:true };
+    default:
+      return { icon: e.result === 'ok' ? '✅' : '❌', label: e.action.replace(/_/g,' '), labelStyle:'', rowStyle:'', isSystem: e.user === 'system' };
+  }
 }
 
 function addActiveJob(id, label) {
@@ -2883,18 +3038,20 @@ function _renderAuditPage() {
   _auditPage    = Math.min(_auditPage, Math.max(0, pages - 1));
   const slice   = _auditEntries.slice(_auditPage * perPage, (_auditPage + 1) * perPage);
 
-  el.innerHTML = slice.map(e => `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">
+  el.innerHTML = slice.map(e => {
+    const ev = _auditEventMeta(e);
+    return `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;${ev.rowStyle}">
       <span style="color:var(--text-3);white-space:nowrap;min-width:140px;font-size:12px;">${formatDate(e.timestamp)}</span>
-      <span>${e.result==='ok'?'✅':'❌'}</span>
+      <span>${ev.icon}</span>
       <div>
-        <span style="font-weight:600;">${esc(e.user)}</span>
-        <span class="text-2"> ${esc(e.action.replace(/_/g,' '))}</span>
+        ${ev.isSystem ? '<span style="font-size:11px;color:var(--text-3);font-weight:600;">SYSTEM</span>' : `<span style="font-weight:600;">${esc(e.user)}</span>`}
+        <span class="text-2" style="${ev.labelStyle}"> ${ev.label}</span>
         ${e.target?`<span class="text-3"> → ${esc(e.target)}</span>`:''}
         ${e.details?`<div class="text-3 text-sm mt-1">${esc(e.details)}</div>`:''}
       </div>
-    </div>
-  `).join('') || '<div style="color:var(--text-3);padding:16px;">No entries on this page.</div>';
+    </div>`;
+  }).join('') || '<div style="color:var(--text-3);padding:16px;">No entries on this page.</div>';
 
   if (pages <= 1) {
     pagEl.style.display = 'none';
@@ -3169,18 +3326,43 @@ function fmtBytes(n) {
   return (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) + ' ' + suffixes[idx];
 }
 
+// Strip partition suffix from a /dev/ path so sdb1 → /dev/sdb, nvme0n1p1 → /dev/nvme0n1.
+function stripPart(p) {
+  if (/\/nvme\d+n\d+p\d+$/.test(p)) return p.replace(/p\d+$/, '');
+  if (/\/sd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');
+  if (/\/hd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');
+  return p;
+}
+
 // ===== Pool bar chart =====
 let poolData      = null;
 let _addDisksVer  = null;  // ZFS version info cached when Add Disks modal opens
 let _addDisksMode = null;  // currently selected add mode
 let datasetData = [];
+let allPoolsData           = [];   // all Pool objects from GET /api/pools
+let selectedPoolName       = null; // active pool in the Pool tab
+let selectedTopBarPoolName = null; // active pool in the top capacity bar
+let _diskSerialMap         = {};   // device path → serial number, populated on pool tab load
 
 async function refreshPoolBar() {
   try {
-    const [pr, dr] = await Promise.all([fetch('/api/pool'), fetch('/api/datasets')]);
-    poolData   = pr.ok ? await pr.json() : null;
-    datasetData = dr.ok ? await dr.json() : [];
+    const [pr, dr] = await Promise.all([fetch('/api/pools'), fetch('/api/datasets')]);
+    allPoolsData = pr.ok ? (await pr.json() || []) : [];
+    datasetData  = dr.ok ? await dr.json() : [];
   } catch { return; }
+
+  // Resolve selectedTopBarPoolName: restore from pref when null or pool removed.
+  if (allPoolsData.length > 0) {
+    const stillValid = allPoolsData.find(p => p.name === selectedTopBarPoolName);
+    if (!stillValid) {
+      const prefName = currentUser && currentUser.preferences && currentUser.preferences.selected_top_bar_pool;
+      const prefValid = prefName && allPoolsData.find(p => p.name === prefName);
+      selectedTopBarPoolName = prefValid ? prefName : allPoolsData[0].name;
+    }
+  } else {
+    selectedTopBarPoolName = null;
+  }
+  poolData = allPoolsData.find(p => p.name === selectedTopBarPoolName) || null;
   renderPoolBar();
 }
 
@@ -3208,6 +3390,19 @@ function renderPoolBar() {
   const legend = document.getElementById('pool-legend');
   const sumEl  = document.getElementById('pool-summary');
 
+  // Update top-bar title: static text for single pool, green dropdown for multiple.
+  const titleEl = document.getElementById('topbar-pool-title');
+  if (titleEl) {
+    if (allPoolsData.length > 1) {
+      const opts = allPoolsData.map(p =>
+        `<option value="${esc(p.name)}"${p.name === selectedTopBarPoolName ? ' selected' : ''}>${esc(p.name)}</option>`
+      ).join('');
+      titleEl.innerHTML = `<select id="topbar-pool-selector" onchange="switchTopBarPool(this.value)" style="appearance:none;-webkit-appearance:none;background:rgba(59,130,246,0.12) url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;) no-repeat right 8px center;border:1.5px solid rgba(59,130,246,0.40);border-radius:6px;color:#3b82f6;font-size:inherit;font-weight:inherit;cursor:pointer;font-family:inherit;padding:3px 26px 3px 10px;outline:none;">${opts}</select>`;
+    } else {
+      titleEl.textContent = 'Pool Capacity';
+    }
+  }
+
   // Show/hide IO charts bar based on pool membership, not IO data availability.
   // This ensures charts appear immediately on login even before the first IO sample.
   const ioBar = document.getElementById('io-bar');
@@ -3225,6 +3420,7 @@ function renderPoolBar() {
     bar.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--text-3);font-size:13px;">No pool configured</div>';
     legend.innerHTML = '';
     sumEl.textContent = '';
+    updatePoolNavDot();
     return;
   }
 
@@ -3236,15 +3432,37 @@ function renderPoolBar() {
   const summaryUsedPct = total > 0 ? (usedByData / total * 100) : 0;
   const summaryFreePct = 100 - summaryUsedPct;
   const summaryPctColor = summaryUsedPct >= 80 ? 'var(--accent-danger)' : summaryUsedPct >= 75 ? '#ff9f0a' : 'var(--accent-3)';
-  sumEl.innerHTML = `${esc(poolData.name)}  ·  ${fmtBytes(total)} usable  ·  ${fmtBytes(usedByData)} used <span style="color:${summaryPctColor};font-weight:700;">(${summaryUsedPct.toFixed(1)}%)</span>  ·  ${fmtBytes(free)} free (${summaryFreePct.toFixed(1)}%)  ·  ${poolStatusBadge(poolData)}`;
+  const poolNamePrefix = allPoolsData.length > 1 ? '' : `${esc(poolData.name)}  ·  `;
+  sumEl.innerHTML = `${poolNamePrefix}${fmtBytes(total)} usable  ·  ${fmtBytes(usedByData)} used <span style="color:${summaryPctColor};font-weight:700;">(${summaryUsedPct.toFixed(1)}%)</span>  ·  ${fmtBytes(free)} free (${summaryFreePct.toFixed(1)}%)  ·  ${poolStatusBadge(poolData)}`;
 
-  // Use depth-1 datasets (direct children of pool root) to avoid double-counting.
-  const depth1 = (datasetData || []).filter(d => d.depth === 1);
-  const dsUsedTotal = depth1.reduce((s, d) => s + d.used, 0);
-  // Overhead = root used minus sum of child datasets (ZFS metadata, etc.)
-  const overhead = Math.max(0, usedByData - dsUsedTotal);
+  // Update IO chart device filter for the selected pool.
+  // member_devices may contain partition paths (/dev/sdb1) but diskstats keys are
+  // disk names (sdb).  Apply stripPart first, then strip the /dev/ prefix.
+  // Skip unresolved UUID paths — they cannot be matched against diskstats.
+  // Fall back to null (show all) when empty or on a single-pool setup.
+  const _poolDevNames = allPoolsData.length > 1 && poolData
+    ? (poolData.member_devices || [])
+        .filter(d => !d.includes('/by-partuuid/') && !d.includes('/by-id/'))
+        .map(d => stripPart(d).replace(/^\/dev\//, ''))
+        .filter(Boolean)
+    : [];
+  _ioCurrentPoolDevs = _poolDevNames.length > 0 ? new Set(_poolDevNames) : null;
 
-  if (!depth1.length && overhead === 0) {
+  // Show all non-root datasets for the selected pool.
+  // For each dataset compute its "own" used space = used minus direct children's used,
+  // so we can show all depths without double-counting.
+  const allPoolDs = (datasetData || []).filter(d => d.depth >= 1 && d.name.split('/')[0] === poolData.name);
+  allPoolDs.forEach(d => {
+    const directChildrenUsed = allPoolDs
+      .filter(c => c.depth === d.depth + 1 && c.name.startsWith(d.name + '/'))
+      .reduce((s, c) => s + c.used, 0);
+    d._ownUsed = Math.max(0, d.used - directChildrenUsed);
+  });
+  // Overhead = pool used minus sum of depth-1 datasets' used (ZFS metadata/reservation).
+  const depth1Used = allPoolDs.filter(d => d.depth === 1).reduce((s, d) => s + d.used, 0);
+  const overhead = Math.max(0, usedByData - depth1Used);
+
+  if (!allPoolDs.length && overhead === 0) {
     bar.innerHTML = `<div class="pool-bar-segment" style="flex:1;background:rgba(255,255,255,0.06);cursor:default;color:var(--text-3);">Free ${fmtBytes(free)}</div>`;
     legend.innerHTML = '';
     return;
@@ -3252,10 +3470,13 @@ function renderPoolBar() {
 
   // Build segment list: datasets + overhead + free
   const segments = [];
-  depth1.forEach((d, i) => {
-    const pct = total > 0 ? (d.used / total * 100) : 0;
+  allPoolDs.forEach((d, i) => {
+    const bytes = d._ownUsed;
+    const pct = total > 0 ? (bytes / total * 100) : 0;
     if (pct >= 0.2) {
-      segments.push({ key: d.name, label: d.short_name, pct, bytes: d.used, color: COLORS[i % COLORS.length], isDs: true, d });
+      // Label: show full relative path for nested datasets.
+      const relLabel = d.depth > 1 ? d.name.slice(poolData.name.length + 1) : d.short_name;
+      segments.push({ key: d.name, label: relLabel, pct, bytes, color: COLORS[i % COLORS.length], isDs: true, d });
     }
   });
 
@@ -3312,6 +3533,8 @@ function renderPoolBar() {
       <span style="color:var(--text-3);">System</span>
       <span class="text-3" style="margin-left:4px;">${fmtBytes(overheadSeg.bytes)}</span>
     </div>` : '') + freeLegend;
+
+  updatePoolNavDot();
 }
 
 // ===== Pool page =====
@@ -3320,12 +3543,34 @@ let _poolStatusInterval = null;
 async function loadPool() {
   const el = document.getElementById('pool-content');
   el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
-  await refreshPoolBar();
+  const [, disksResp] = await Promise.all([refreshPoolBar(), fetch('/api/disks').catch(() => null)]);
+  if (disksResp && disksResp.ok) {
+    try {
+      const disks = await disksResp.json();
+      _diskSerialMap = {};
+      (disks || []).forEach(d => { if (d.device && d.serial) _diskSerialMap[d.device] = d.serial; });
+    } catch { /* ignore */ }
+  }
 
   _clearPoolStatusInterval();
 
-  if (poolData) {
-    renderPoolExists(el, poolData);
+  // Resolve selectedPoolName: restore from pref when null or pool removed.
+  if (allPoolsData.length > 0) {
+    const stillValid = allPoolsData.find(p => p.name === selectedPoolName);
+    if (!stillValid) {
+      const prefName = currentUser && currentUser.preferences && currentUser.preferences.selected_pool;
+      const prefValid = prefName && allPoolsData.find(p => p.name === prefName);
+      selectedPoolName = prefValid ? prefName : allPoolsData[0].name;
+    }
+  } else {
+    selectedPoolName = null;
+  }
+
+  _renderPoolTabTitle();
+
+  const pool = allPoolsData.find(p => p.name === selectedPoolName);
+  if (pool) {
+    renderPoolExists(el, pool);
     _startPoolStatusRefresh();
   } else {
     renderPoolCreate(el);
@@ -3345,7 +3590,7 @@ async function _fetchPoolStatus() {
   const pre = document.getElementById('pool-status-output');
   if (!pre) { _clearPoolStatusInterval(); return; }
   try {
-    const resp = await fetch('/api/pool/status');
+    const resp = await fetch('/api/pool/status?name=' + encodeURIComponent(selectedPoolName || ''));
     const data = await resp.json();
     if (resp.ok) {
       const statusText = data.output || '(no output)';
@@ -3365,6 +3610,137 @@ async function _fetchPoolStatus() {
   _fetchScrubStatus();
 }
 
+// ===== Pool health nav dot =====
+function updatePoolNavDot() {
+  const dot = document.getElementById('nav-pool-dot');
+  if (!dot) return;
+  if (!allPoolsData.length) { dot.style.display = 'none'; return; }
+
+  // Determine worst health across all pools.
+  let worst = 'ONLINE'; // green
+  for (const p of allPoolsData) {
+    const h = (p.health || '').toUpperCase();
+    if (h === 'FAULTED' || h === 'UNAVAIL' || h === 'REMOVED' || h === 'SUSPENDED') { worst = 'FAULTED'; break; }
+    if (h === 'DEGRADED' || h === 'OFFLINE') worst = 'DEGRADED';
+  }
+
+  const color = worst === 'ONLINE'  ? 'var(--accent-3)' :
+                worst === 'DEGRADED' ? 'var(--accent-warn)' : 'var(--accent-danger)';
+  dot.style.display = 'block';
+  dot.style.background = color;
+  dot.style.boxShadow = `0 0 5px ${color}`;
+}
+
+async function updateServiceNavDots() {
+  try {
+    const [sr, nr, shr, nhr] = await Promise.all([
+      fetch('/api/shares/status'),
+      fetch('/api/nfs/status'),
+      fetch('/api/shares'),
+      fetch('/api/nfs/shares'),
+    ]);
+    const smb      = sr.ok  ? await sr.json()  : null;
+    const nfs      = nr.ok  ? await nr.json()  : null;
+    const smbCount = shr.ok ? (await shr.json() || []).length : 0;
+    const nfsCount = nhr.ok ? (await nhr.json() || []).length : 0;
+
+    function applyDot(id, status, shareCount) {
+      const dot = document.getElementById(id);
+      if (!dot) return;
+      if (!status) { dot.style.display = 'none'; return; }
+      const s = status.status || '';
+      if (s === 'active') {
+        dot.style.display = 'block';
+        dot.style.background = 'var(--accent-3)';
+        dot.style.boxShadow = '0 0 5px var(--accent-3)';
+      } else if (s === 'inactive' && shareCount > 0) {
+        dot.style.display = 'block';
+        dot.style.background = 'var(--accent-danger)';
+        dot.style.boxShadow = '0 0 5px var(--accent-danger)';
+      } else if (s === 'inactive') {
+        dot.style.display = 'block';
+        dot.style.background = 'var(--accent-warn)';
+        dot.style.boxShadow = '0 0 5px var(--accent-warn)';
+      } else {
+        dot.style.display = 'none';
+      }
+    }
+
+    applyDot('nav-smb-dot', smb, smbCount);
+    applyDot('nav-nfs-dot', nfs, nfsCount);
+  } catch (_) {}
+}
+
+// ===== Multi-pool helpers =====
+
+function _renderPoolTabTitle() {
+  const titleEl = document.getElementById('pool-page-title');
+  if (!titleEl) return;
+  if (allPoolsData.length > 1) {
+    const opts = allPoolsData.map(p =>
+      `<option value="${esc(p.name)}"${p.name === selectedPoolName ? ' selected' : ''}>${esc(p.name)}</option>`
+    ).join('');
+    titleEl.innerHTML = `<select id="pool-tab-selector" onchange="switchPoolTab(this.value)" style="appearance:none;-webkit-appearance:none;background:rgba(59,130,246,0.12) url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;) no-repeat right 10px center;border:1.5px solid rgba(59,130,246,0.40);border-radius:8px;color:#3b82f6;font-size:inherit;font-weight:600;cursor:pointer;font-family:inherit;padding:4px 34px 4px 12px;outline:none;line-height:inherit;">${opts}</select>`;
+  } else {
+    titleEl.textContent = 'ZFS Pool';
+  }
+}
+
+function switchPoolTab(name) {
+  selectedPoolName = name;
+  savePoolPrefs();
+  const el = document.getElementById('pool-content');
+  _clearPoolStatusInterval();
+  el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading…</div>';
+  fetch('/api/pools').then(r => r.json()).then(pools => {
+    allPoolsData = pools || [];
+    const pool = allPoolsData.find(p => p.name === name);
+    if (pool) {
+      renderPoolExists(el, pool);
+      _startPoolStatusRefresh();
+    }
+    _renderPoolTabTitle();
+  }).catch(() => {});
+}
+
+function switchTopBarPool(name) {
+  selectedTopBarPoolName = name;
+  poolData = allPoolsData.find(p => p.name === name) || null;
+  resetIOCharts();
+  renderPoolBar();
+  savePoolPrefs();
+}
+
+function savePoolPrefs() {
+  if (!currentUser) return;
+  const prefs = Object.assign({}, currentUser.preferences || {}, {
+    selected_pool: selectedPoolName,
+    selected_top_bar_pool: selectedTopBarPoolName,
+  });
+  currentUser.preferences = prefs;
+  fetch('/api/prefs', {
+    method: 'PUT', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(prefs),
+  }).catch(() => {});
+}
+
+// Update a pool in allPoolsData cache; also refreshes poolData/top bar if it's the top-bar pool.
+function _updatePoolInCache(pool) {
+  if (!pool || !pool.name) return;
+  const idx = allPoolsData.findIndex(p => p.name === pool.name);
+  if (idx >= 0) allPoolsData[idx] = pool;
+  if (selectedTopBarPoolName === pool.name) {
+    poolData = pool;
+    renderPoolBar();
+  }
+}
+
+function openNewPool() {
+  const el = document.getElementById('pool-content');
+  _clearPoolStatusInterval();
+  renderPoolCreate(el, { backPoolName: selectedPoolName });
+}
+
 function renderPoolExists(el, pool) {
   const healthColor = poolStatusColor(pool);
 
@@ -3374,40 +3750,74 @@ function renderPoolExists(el, pool) {
   const usableAvail = pool.usable_avail || pool.free;
 
   // Inject header action buttons.
+  const allDisksOnline = (pool.member_statuses || []).length > 0 &&
+    (pool.member_statuses || []).every(s => s === 'ONLINE');
+  // Disks that ZFS thinks are offline/unavail but are physically visible in /dev
+  const recoverableDisks = (pool.members || []).filter((m, i) => {
+    const st = (pool.member_statuses && pool.member_statuses[i]) || 'ONLINE';
+    const present = pool.member_present && pool.member_present[i];
+    return st !== 'ONLINE' && present;
+  });
+  const showFixer = currentUser.role === 'admin' && pool.health === 'SUSPENDED' &&
+    (allDisksOnline || recoverableDisks.length > 0);
+  const fixerBtn = showFixer
+    ? `<button class="btn btn-sm" onclick="openPoolFixerWizard()"
+        style="background:linear-gradient(135deg,#6e40c9 0%,#2d7dd2 50%,#0dbbbd 100%);color:#fff;border:none;font-weight:600;letter-spacing:.02em;box-shadow:0 0 12px rgba(110,64,201,0.45);">✦ Pool Fixer Wizard</button>`
+    : '';
   document.getElementById('pool-header-actions').innerHTML = currentUser.role === 'admin' ? `
+    ${fixerBtn}
     <span id="pool-upgrade-btn-wrap"></span>
+    <button class="btn btn-primary btn-sm" onclick="openNewPool()">+ New Pool</button>
     <button class="btn btn-ghost btn-sm" onclick="openCacheConfigModal()">⚡ Cache Config</button>
     <button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>
     <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);border-color:var(--accent-danger);"
       onclick="openDestroyPoolModal()">Destroy Pool</button>
-  ` : `<button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>`;
+  ` : `${fixerBtn}<button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>`;
 
   // Member disks section (data members + cache devices).
-  const _diskEntry = (rawPath, devPath, roleLabel, roleColor) => {
+  const _diskEntry = (rawPath, devPath, roleLabel, roleColor, diskState, poolName) => {
     const uuid = rawPath.includes('/by-partuuid/') ? rawPath.split('/').pop() : null;
     const showUuid = uuid && uuid !== devPath;
+    const sn = _diskSerialMap[devPath] || _diskSerialMap[stripPart(devPath)] || '';
+    const isOffline = diskState === 'OFFLINE';
+    const stateColor = diskState === 'ONLINE' ? '' : diskState === 'OFFLINE' ? 'color:var(--text-3);' : 'color:var(--accent-danger);';
+    const stateLabel = diskState && diskState !== 'ONLINE' ? ` <span style="font-size:10px;font-weight:600;${stateColor}">${esc(diskState)}</span>` : '';
+    const menuId = 'disk-menu-' + Math.random().toString(36).slice(2);
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    const burgerMenu = isAdmin && poolName ? `
+      <div style="position:relative;flex-shrink:0;">
+        <button onclick="toggleDiskMenu('${menuId}')" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;" title="Disk actions">⋮</button>
+        <div id="${menuId}" style="display:none;position:absolute;right:0;top:100%;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow);min-width:170px;overflow:hidden;">
+          ${!isOffline ? `<button class="disk-menu-item" onclick="closeDiskMenus();openDiskOfflineModal('${esc(poolName)}','${esc(devPath)}')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--accent-warn);">⏻ Force Disk Offline</button>` : ''}
+          ${isOffline  ? `<button class="disk-menu-item" onclick="closeDiskMenus();submitDiskOnline('${esc(poolName)}','${esc(devPath)}')" style="display:block;width:100%;text-align:left;padding:9px 14px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--accent-3);">▶ Force Disk Online</button>` : ''}
+        </div>
+      </div>` : '';
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-        <span style="font-size:18px;">💿</span>
+        <span style="font-size:18px;${isOffline ? 'opacity:.4;' : ''}">💿</span>
         <div style="min-width:0;">
-          <div style="font-family:monospace;font-size:13px;font-weight:600;">${esc(devPath)}</div>
+          <div style="font-family:monospace;font-size:13px;font-weight:600;">${esc(devPath)}${stateLabel}${sn ? ` <span style="font-weight:400;color:var(--text-3);font-size:11px;">(${esc(sn)})</span>` : ''}</div>
           ${showUuid ? `<div style="font-family:monospace;font-size:10px;color:var(--text-3);margin-top:2px;">${esc(uuid)}</div>` : ''}
         </div>
       </div>
-      <span style="font-size:11px;font-weight:600;white-space:nowrap;color:${roleColor};">${roleLabel}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <span style="font-size:11px;font-weight:600;white-space:nowrap;color:${roleColor};">${roleLabel}</span>
+        ${burgerMenu}
+      </div>
     </div>`;
   };
 
   const memberRows = (pool.members || []).map((m, i) => {
-    const dev  = (pool.member_devices && pool.member_devices[i]) || m;
-    const role = (pool.member_roles  && pool.member_roles[i])   || 'data';
+    const dev    = (pool.member_devices  && pool.member_devices[i])  || m;
+    const role   = (pool.member_roles    && pool.member_roles[i])    || 'data';
+    const status = (pool.member_statuses && pool.member_statuses[i]) || 'ONLINE';
     const roleLabel = {stripe:'Stripe', mirror:'Mirror', raidz1:'RAIDZ-1', raidz2:'RAIDZ-2'}[role] || role.toUpperCase();
-    return _diskEntry(m, dev, roleLabel, 'var(--accent-2)');
+    return _diskEntry(m, dev, roleLabel, 'var(--accent-2)', status, pool.name);
   });
   const cacheRows = (pool.cache_devs || []).map((m, i) => {
     const dev = (pool.cache_devices && pool.cache_devices[i]) || m;
-    return _diskEntry(m, dev, 'L2ARC Cache', '#bf5af2');
+    return _diskEntry(m, dev, 'L2ARC Cache', '#bf5af2', 'ONLINE', null);
   });
 
   const allRows = [...memberRows, ...cacheRows];
@@ -3491,9 +3901,13 @@ function renderPoolExists(el, pool) {
     </div>`;
 }
 
-function renderPoolCreate(el) {
+function renderPoolCreate(el, options) {
+  options = options || {};
+  const backBtn = options.backPoolName
+    ? `<button class="btn btn-ghost btn-sm" onclick="loadPool()">← ${esc(options.backPoolName)}</button>`
+    : '';
   document.getElementById('pool-header-actions').innerHTML =
-    `<button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>`;
+    backBtn + `<button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>`;
   el.innerHTML = `
     <div class="card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
@@ -3704,43 +4118,140 @@ async function _doCreatePool() {
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating pool…';
   addActiveJob('pool-create', 'Creating ZFS pool…');
 
-  const resp = await fetch('/api/pool', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name, layout: window._cpLayout, ashift: window._cpAshift,
-      compression: window._cpCompression, dedup: window._cpDedup, devices }),
-  });
-  removeActiveJob('pool-create');
-  const data = await resp.json();
-  if (!resp.ok) {
+  let jobId;
+  try {
+    const resp = await fetch('/api/pool', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, layout: window._cpLayout, ashift: window._cpAshift,
+        compression: window._cpCompression, dedup: window._cpDedup, devices }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      removeActiveJob('pool-create');
+      btn.disabled = false; btn.innerHTML = 'Create Pool';
+      alertEl.textContent = data.error || 'Failed to create pool.'; alertEl.classList.remove('hidden'); return;
+    }
+    jobId = data.job_id;
+  } catch (e) {
+    removeActiveJob('pool-create');
     btn.disabled = false; btn.innerHTML = 'Create Pool';
-    alertEl.textContent = data.error || 'Failed to create pool.'; alertEl.classList.remove('hidden'); return;
+    alertEl.textContent = 'Failed to start pool creation.'; alertEl.classList.remove('hidden'); return;
   }
-  await refreshPoolBar();
-  loadPool();
+
+  // Poll for completion (up to 5 minutes).
+  for (let i = 0; i < 150; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const sr = await fetch('/api/pool/create-status?id=' + encodeURIComponent(jobId));
+      const s = await sr.json();
+      if (s.status === 'done') {
+        removeActiveJob('pool-create');
+        selectedPoolName = name;
+        await refreshPoolBar();
+        loadPool();
+        return;
+      }
+      if (s.status === 'error') {
+        removeActiveJob('pool-create');
+        btn.disabled = false; btn.innerHTML = 'Create Pool';
+        alertEl.textContent = s.error || 'Failed to create pool.'; alertEl.classList.remove('hidden'); return;
+      }
+    } catch (_) { /* transient network error, keep polling */ }
+  }
+
+  removeActiveJob('pool-create');
+  alertEl.textContent = 'Pool creation timed out. Check server status.'; alertEl.classList.remove('hidden');
+  btn.disabled = false; btn.innerHTML = 'Create Pool';
 }
 
 async function detectPools() {
   const resp = await fetch('/api/pool/detect');
   const pools = await resp.json();
-  if (!pools.length) { alert('No importable pools found.'); return; }
+  if (!pools.length) {
+    openImportPoolModal([]);
+    return;
+  }
+  openImportPoolModal(pools);
+}
 
-  const names = pools.map(p => `${p.name} (${p.state})`).join('\n');
-  const choice = prompt(`Found pools:\n${names}\n\nEnter pool name to import:`);
-  if (!choice) return;
+let _importPoolSelected = null;
 
-  const poolName = choice.trim();
+function openImportPoolModal(pools) {
+  _importPoolSelected = null;
+  const listEl  = document.getElementById('import-pool-list');
+  const alertEl = document.getElementById('import-pool-alert');
+  const btn     = document.getElementById('btn-import-pool-confirm');
+  alertEl.classList.add('hidden');
+  btn.disabled = true;
+
+  if (!pools.length) {
+    listEl.innerHTML = '<div style="color:var(--text-3);font-size:14px;text-align:center;padding:16px 0;">No importable pools found.</div>';
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = '';
+    listEl.innerHTML = pools.map(p => {
+      const stateColor = p.state === 'ONLINE' ? 'var(--accent-3)' : p.state === 'DEGRADED' ? 'var(--accent-warn)' : 'var(--accent-danger)';
+      return `<div class="import-pool-option" data-name="${esc(p.name)}" onclick="selectImportPool(this,'${esc(p.name)}')"
+        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color .15s,background .15s;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:18px;">🗄</span>
+          <span style="font-family:monospace;font-size:14px;font-weight:600;">${esc(p.name)}</span>
+        </div>
+        <span style="font-size:12px;font-weight:600;color:${stateColor};">${esc(p.state||'UNKNOWN')}</span>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('modal-import-pool').classList.remove('hidden');
+}
+
+function selectImportPool(el, name) {
+  document.querySelectorAll('.import-pool-option').forEach(o => {
+    o.style.borderColor = 'var(--border)';
+    o.style.background  = '';
+  });
+  el.style.borderColor = 'var(--accent-2)';
+  el.style.background  = 'rgba(48,209,88,0.08)';
+  _importPoolSelected  = name;
+  document.getElementById('btn-import-pool-confirm').disabled = false;
+}
+
+function closeImportPoolModal() {
+  document.getElementById('modal-import-pool').classList.add('hidden');
+}
+
+async function submitImportPool() {
+  const poolName = _importPoolSelected;
+  if (!poolName) return;
+  const btn     = document.getElementById('btn-import-pool-confirm');
+  const alertEl = document.getElementById('import-pool-alert');
+  alertEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
   const r = await fetch('/api/pool/import', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({name: poolName}),
   });
   const d = await r.json();
-  if (r.ok) { await refreshPoolBar(); loadPool(); return; }
+
+  btn.disabled = false;
+  btn.textContent = 'Import';
+
+  if (r.ok) {
+    closeImportPoolModal();
+    await refreshPoolBar();
+    loadPool();
+    return;
+  }
 
   const errMsg = d.error || 'Import failed.';
   if (errMsg.includes('-f') || errMsg.toLowerCase().includes('previously') || errMsg.toLowerCase().includes('force')) {
+    closeImportPoolModal();
     openForceImportModal(poolName, errMsg);
   } else {
-    alert(errMsg);
+    alertEl.textContent = errMsg;
+    alertEl.classList.remove('hidden');
   }
 }
 
@@ -3851,12 +4362,6 @@ async function openAddDisksModal() {
     const disks = await disksResp.json() || [];
     _addDisksVer = verResp.ok ? await verResp.json() : null;
 
-    const stripPart = p => {
-      if (/\/nvme\d+n\d+p\d+$/.test(p)) return p.replace(/p\d+$/, '');
-      if (/\/sd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');
-      if (/\/hd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');
-      return p;
-    };
     const poolDevices = new Set(
       ((poolData && poolData.members) ? poolData.members : []).map(stripPart)
     );
@@ -3977,7 +4482,7 @@ async function submitAddDisks() {
 
   const resp = await fetch('/api/pool/grow', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ devices: checked, mode: _addDisksMode }),
+    body: JSON.stringify({ devices: checked, mode: _addDisksMode, pool: selectedPoolName }),
   });
   const data = await resp.json();
   btn.disabled = false; btn.textContent = 'Add to Pool';
@@ -4056,6 +4561,7 @@ async function submitPoolSettings() {
     return el ? el.value : null;
   };
   const body = {
+    pool:        selectedPoolName,
     compression: val('ps-compression-btns'),
     dedup:       val('ps-dedup-btns'),
     sync:        val('ps-sync-btns'),
@@ -4075,10 +4581,10 @@ async function submitPoolSettings() {
     alertEl.classList.remove('hidden');
     return;
   }
-  poolData = data;
+  _updatePoolInCache(data);
   closePoolSettingsModal();
   const el = document.getElementById('pool-content');
-  if (el) renderPoolExists(el, poolData);
+  if (el) renderPoolExists(el, data);
   refreshActivityBar();
 }
 
@@ -4093,15 +4599,19 @@ function openCacheConfigModal() {
 }
 function closeCacheConfigModal() {
   document.getElementById('modal-cache-config').classList.add('hidden');
-  if (_cacheChanged && poolData) {
-    const el = document.getElementById('pool-content');
-    if (el) renderPoolExists(el, poolData);
+  if (_cacheChanged) {
+    const tabPool = allPoolsData.find(p => p.name === selectedPoolName);
+    if (tabPool) {
+      const el = document.getElementById('pool-content');
+      if (el) renderPoolExists(el, tabPool);
+    }
   }
   _cacheChanged = false;
 }
 
 function _renderCacheModal() {
-  const cacheDevs = (poolData && poolData.cache_devs) ? poolData.cache_devs : [];
+  const tabPool = allPoolsData.find(p => p.name === selectedPoolName) || poolData;
+  const cacheDevs = (tabPool && tabPool.cache_devs) ? tabPool.cache_devs : [];
   const listEl = document.getElementById('cache-current-list');
   if (cacheDevs.length === 0) {
     listEl.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:8px 0;">No cache devices assigned.</div>';
@@ -4119,14 +4629,21 @@ function _renderCacheModal() {
   const cacheSet = new Set(cacheDevs);
   sel.innerHTML = '<option value="">Loading available disks…</option>';
   sel.disabled = true;
+  // Build set of all devices already in any pool (members + cache across all pools).
+  const allPoolDevices = new Set(allPoolsData.flatMap(p => [
+    ...(p.member_devices || []), ...(p.members || []),
+    ...(p.cache_devices || []), ...(p.cache_devs || []),
+  ]));
   fetch('/api/disks').then(r => r.json()).then(disks => {
-    const available = (disks || []).filter(d => !d.in_use && !cacheSet.has(d.device));
+    const available = (disks || []).filter(d =>
+      !d.in_use && !cacheSet.has(d.device) &&
+      !allPoolDevices.has(d.device) && !allPoolDevices.has('/dev/' + d.name));
     sel.disabled = false;
     if (available.length === 0) {
       sel.innerHTML = '<option value="">No available disks</option>';
     } else {
       sel.innerHTML = available.map(d =>
-        `<option value="${esc(d.device)}">${esc(d.device)} — ${esc(d.vendor||'')} ${esc(d.model||'')} (${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)})</option>`
+        `<option value="${esc(d.device)}">${esc(d.device)}${d.serial ? ` (${esc(d.serial)})` : ''} — ${esc(d.vendor||'')} ${esc(d.model||'')} (${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)})</option>`
       ).join('');
     }
   }).catch(() => {
@@ -4154,7 +4671,7 @@ async function submitAddCache() {
 
   const resp = await fetch('/api/pool/cache', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({device}),
+    body: JSON.stringify({device, pool: selectedPoolName}),
   });
   const data = await resp.json();
 
@@ -4169,7 +4686,7 @@ async function submitAddCache() {
     _renderCacheModal();
     return;
   }
-  poolData = data;
+  _updatePoolInCache(data);
   _cacheChanged = true;
   _renderCacheModal();
   _silentRefreshDisks();
@@ -4197,7 +4714,7 @@ async function confirmCacheRemove() {
   alertEl.classList.add('hidden');
   const resp = await fetch('/api/pool/cache', {
     method: 'DELETE', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({device: _cacheRemoveDevice}),
+    body: JSON.stringify({device: _cacheRemoveDevice, pool: selectedPoolName}),
   });
   const data = await resp.json();
   closeCacheRemoveConfirm();
@@ -4206,17 +4723,203 @@ async function confirmCacheRemove() {
     alertEl.classList.remove('hidden');
     return;
   }
-  poolData = data;
+  _updatePoolInCache(data);
   _cacheChanged = true;
   _renderCacheModal();
   _silentRefreshDisks();
+}
+
+// ===== Disk Offline / Online =====
+function toggleDiskMenu(id) {
+  closeDiskMenus(id);
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+function closeDiskMenus(exceptId) {
+  document.querySelectorAll('[id^="disk-menu-"]').forEach(m => {
+    if (m.id !== exceptId) m.style.display = 'none';
+  });
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('[id^="disk-menu-"]') && !e.target.closest('button[onclick*="toggleDiskMenu"]'))
+    closeDiskMenus();
+});
+
+let _diskOfflinePending = null;
+function openDiskOfflineModal(poolName, device) {
+  _diskOfflinePending = {poolName, device};
+  document.getElementById('disk-offline-name').textContent = device;
+  document.getElementById('disk-offline-pool').textContent = poolName;
+  document.getElementById('disk-offline-alert').classList.add('hidden');
+  const btn = document.getElementById('btn-disk-offline-confirm');
+  btn.disabled = false;
+  btn.textContent = 'Force Offline';
+  document.getElementById('modal-disk-offline').classList.remove('hidden');
+}
+function closeDiskOfflineModal() {
+  document.getElementById('modal-disk-offline').classList.add('hidden');
+  _diskOfflinePending = null;
+}
+async function submitDiskOffline() {
+  if (!_diskOfflinePending) return;
+  const {poolName, device} = _diskOfflinePending;
+  const btn     = document.getElementById('btn-disk-offline-confirm');
+  const alertEl = document.getElementById('disk-offline-alert');
+  btn.disabled = true;
+  btn.textContent = 'Working…';
+  alertEl.classList.add('hidden');
+  const resp = await fetch('/api/pool/disk/offline', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({pool: poolName, device}),
+  });
+  const data = await resp.json();
+  if (resp.ok) {
+    closeDiskOfflineModal();
+    _updatePoolInCache(data);
+    const el = document.getElementById('pool-content');
+    if (el && data) renderPoolExists(el, data);
+    updatePoolNavDot();
+  } else {
+    alertEl.textContent = data.error || 'Failed to take disk offline.';
+    alertEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Force Offline';
+  }
+}
+async function submitDiskOnline(poolName, device) {
+  const resp = await fetch('/api/pool/disk/online', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({pool: poolName, device}),
+  });
+  const data = await resp.json();
+  if (resp.ok) {
+    _updatePoolInCache(data);
+    const el = document.getElementById('pool-content');
+    if (el && data) renderPoolExists(el, data);
+    updatePoolNavDot();
+  } else {
+    alert(data.error || 'Failed to bring disk online.');
+  }
+}
+
+// ===== Pool Fixer Wizard =====
+let _fixerScene = 'clear'; // 'clear' | 'online'
+let _fixerOnlineDisks = []; // raw member paths to bring online (scene B)
+
+function openPoolFixerWizard() {
+  const pool = allPoolsData.find(p => p.name === selectedPoolName);
+  if (!pool) return;
+
+  const allOnline = (pool.member_statuses || []).length > 0 &&
+    pool.member_statuses.every(s => s === 'ONLINE');
+  const recoverable = (pool.members || []).filter((m, i) => {
+    const st = (pool.member_statuses && pool.member_statuses[i]) || 'ONLINE';
+    const present = pool.member_present && pool.member_present[i];
+    return st !== 'ONLINE' && present;
+  });
+
+  document.getElementById('pool-fixer-alert').classList.add('hidden');
+  const btn = document.getElementById('btn-pool-fixer-fix');
+  btn.disabled = false;
+
+  if (allOnline) {
+    _fixerScene = 'clear';
+    _fixerOnlineDisks = [];
+    btn.textContent = '✦ Fix Now';
+    document.getElementById('pool-fixer-content').innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:14px;padding:14px;background:rgba(13,187,189,0.07);border:1px solid rgba(13,187,189,0.25);border-radius:var(--radius-sm);">
+        <span style="font-size:28px;line-height:1;flex-shrink:0;">✅</span>
+        <div>
+          <div style="font-weight:600;font-size:14px;color:var(--text-1);margin-bottom:4px;">All disks are back online</div>
+          <div style="font-size:13px;color:var(--text-2);line-height:1.55;">Your pool is currently <strong style="color:var(--accent-danger);">SUSPENDED</strong> — this typically happens after a temporary loss of one or more disks (cable pull, power blip, HBA reset). The pool paused all I/O to protect your data.</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.6;">
+        The wizard has detected that <strong>all member disks are now reporting ONLINE</strong>. Running <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;">zpool clear</code> will clear the error state and resume normal pool operation — no data will be modified.
+      </div>
+      <div style="font-size:13px;color:var(--text-3);background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;line-height:1.55;">
+        ⚠ Only proceed if you have confirmed that the root cause (loose cable, failing HBA, power issue) has been resolved. If the underlying problem persists, the pool may suspend again.
+      </div>`;
+  } else {
+    _fixerScene = 'online';
+    _fixerOnlineDisks = recoverable;
+    btn.textContent = '✦ Recover Pool';
+    const diskList = recoverable.map(m => {
+      const short = m.includes('/by-partuuid/') ? m.split('/').pop() : m;
+      return `<li style="font-family:monospace;font-size:12px;color:var(--text-2);padding:3px 0;">${esc(m)}<span style="font-size:11px;color:var(--text-3);margin-left:6px;">(partuuid: ${esc(short)})</span></li>`;
+    }).join('');
+    document.getElementById('pool-fixer-content').innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:14px;padding:14px;background:rgba(247,181,0,0.07);border:1px solid rgba(247,181,0,0.35);border-radius:var(--radius-sm);">
+        <span style="font-size:28px;line-height:1;flex-shrink:0;">💿</span>
+        <div>
+          <div style="font-weight:600;font-size:14px;color:var(--text-1);margin-bottom:4px;">Disks detected — pool can be recovered</div>
+          <div style="font-size:13px;color:var(--text-2);line-height:1.55;">Your pool is currently <strong style="color:var(--accent-danger);">SUSPENDED</strong> — all I/O has been paused to protect your data. The wizard has found <strong>${recoverable.length}</strong> disk${recoverable.length > 1 ? 's' : ''} that ZFS still considers offline but that are now physically visible on this system.</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.6;">
+        <strong style="color:var(--text-1);">What the wizard will do:</strong>
+        <ol style="margin:8px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:5px;">
+          <li>Run <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;">zpool clear ${esc(selectedPoolName||'')}</code> — clears the SUSPENDED state and resumes I/O. This must happen first; ZFS cannot accept <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;">zpool online</code> while the pool is suspended.</li>
+          <li>Run <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;">zpool online ${esc(selectedPoolName||'')} &lt;device&gt;…</code> — tells ZFS the disks are back. On a redundant pool (mirror / RAIDZ) resilvering will start automatically to verify or repair data.</li>
+        </ol>
+      </div>
+      <div style="font-size:13px;color:var(--text-2);">
+        <strong style="color:var(--text-1);">Disk${recoverable.length > 1 ? 's' : ''} that will be brought back online:</strong>
+        <ul style="margin:6px 0 0 0;padding:0;list-style:none;">${diskList}</ul>
+      </div>
+      <div style="font-size:13px;color:var(--text-3);background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px;line-height:1.55;">
+        ⚠ Before proceeding, confirm that the root cause (loose cable, HBA reset, power blip) has been physically resolved. ZFS suspended the pool to prevent data corruption — if the disks are unstable, the pool may suspend again. No data will be written or deleted by this operation.
+      </div>`;
+  }
+
+  document.getElementById('modal-pool-fixer').classList.remove('hidden');
+}
+
+function closePoolFixerWizard() {
+  document.getElementById('modal-pool-fixer').classList.add('hidden');
+}
+
+async function submitPoolFixer() {
+  const btn     = document.getElementById('btn-pool-fixer-fix');
+  const alertEl = document.getElementById('pool-fixer-alert');
+  btn.disabled = true;
+  btn.textContent = _fixerScene === 'online' ? 'Recovering…' : 'Fixing…';
+  alertEl.classList.add('hidden');
+
+  let resp, data;
+  if (_fixerScene === 'online') {
+    resp = await fetch('/api/pool/fixer/online', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({pool: selectedPoolName, devices: _fixerOnlineDisks}),
+    });
+  } else {
+    resp = await fetch('/api/pool/clear', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({pool: selectedPoolName}),
+    });
+  }
+  data = await resp.json();
+
+  if (resp.ok) {
+    closePoolFixerWizard();
+    _updatePoolInCache(data);
+    const el = document.getElementById('pool-content');
+    if (el && data) renderPoolExists(el, data);
+    await refreshPoolBar();
+    updatePoolNavDot();
+    return;
+  }
+  alertEl.textContent = data.error || 'Operation failed.';
+  alertEl.classList.remove('hidden');
+  btn.disabled = false;
+  btn.textContent = _fixerScene === 'online' ? '✦ Recover Pool' : '✦ Fix Now';
 }
 
 // ===== Destroy Pool =====
 function openDestroyPoolModal() {
   document.getElementById('destroy-pool-alert').classList.add('hidden');
   document.getElementById('destroy-pool-confirm-input').value = '';
-  document.getElementById('destroy-pool-confirm-input').placeholder = poolData ? poolData.name : '';
+  document.getElementById('destroy-pool-confirm-input').placeholder = selectedPoolName || '';
   checkDestroyConfirm();
   document.getElementById('modal-destroy-pool').classList.remove('hidden');
   setTimeout(() => document.getElementById('destroy-pool-confirm-input').focus(), 50);
@@ -4228,7 +4931,7 @@ function closeDestroyPoolModal() {
 
 function checkDestroyConfirm() {
   const val = document.getElementById('destroy-pool-confirm-input').value;
-  const match = poolData && val === poolData.name;
+  const match = selectedPoolName && val === selectedPoolName;
   const btn = document.getElementById('btn-destroy-pool-confirm');
   btn.disabled = !match;
   btn.style.opacity = match ? '1' : '.4';
@@ -4238,13 +4941,13 @@ function checkDestroyConfirm() {
 async function submitDestroyPool() {
   const btn = document.getElementById('btn-destroy-pool-confirm');
   const alertEl = document.getElementById('destroy-pool-alert');
-  if (!poolData) return;
+  if (!selectedPoolName) return;
   btn.disabled = true; btn.textContent = 'Destroying…';
   alertEl.classList.add('hidden');
 
   const resp = await fetch('/api/pool/destroy', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name: poolData.name }),
+    body: JSON.stringify({ name: selectedPoolName }),
   });
   const data = await resp.json();
 
@@ -4376,7 +5079,10 @@ async function submitPoolUpgrade() {
   const alertEl = document.getElementById('pool-upgrade-alert');
   btn.disabled = true; btn.textContent = 'Upgrading…';
   alertEl.classList.add('hidden');
-  const resp = await fetch('/api/pool/upgrade', {method:'POST'});
+  const resp = await fetch('/api/pool/upgrade', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({pool: selectedPoolName}),
+  });
   const data = await resp.json();
   if (!resp.ok) {
     btn.disabled = false; btn.textContent = 'Confirm Upgrade';
@@ -4507,54 +5213,101 @@ async function loadDatasets() {
   renderDatasets(el);
 }
 
+function _datasetRow(d, showComment) {
+  const indent = d.depth * 24;
+  const isRoot = d.depth === 0;
+  return `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;padding-left:${indent}px;cursor:pointer;" onclick="openDatasetDetail('${esc(d.name)}')">
+          <span style="opacity:.5;font-size:13px;">${isRoot ? '🗄' : '📁'}</span>
+          <div>
+            <div style="font-weight:600;">${esc(d.short_name)}</div>
+            ${d.depth>0 ? `<div class="text-3 text-xs">${esc(d.name)}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td style="font-family:monospace;font-size:13px;">
+        ${(() => {
+          const poolTotal = poolData ? (poolData.usable_size || (poolData.usable_used + poolData.usable_avail) || poolData.size) : 0;
+          const cap = d.quota > 0 ? d.quota : poolTotal;
+          const pct = cap > 0 ? Math.min(100, d.used / cap * 100) : 0;
+          const barColor = pct >= 90 ? 'var(--accent-danger)' : pct >= 75 ? '#ff9f0a' : 'var(--accent-3)';
+          const label = d.quota > 0 ? 'of quota' : 'of pool';
+          return `${fmtBytes(d.used)}<div title="${pct.toFixed(1)}% ${label}" style="margin-top:3px;height:3px;border-radius:2px;background:rgba(128,128,128,0.3);width:72px;overflow:hidden;"><div style="height:100%;width:${pct.toFixed(1)}%;background:${barColor};border-radius:2px;"></div></div>`;
+        })()}
+      </td>
+      <td style="font-family:monospace;font-size:13px;">${d.quota > 0 ? fmtBytes(d.quota) : 'none'}</td>
+      <td style="font-size:13px;">${esc(d.compression)} <span class="text-3">${esc(d.compress_ratio)}</span></td>
+      ${showComment ? `<td style="font-size:12px;color:var(--text-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d.comment||'')}">${d.comment ? esc(d.comment) : '<span style="color:var(--text-3);">—</span>'}</td>` : ''}
+      <td>
+        ${!isRoot && currentUser.role==='admin' ? `
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="openCreateSnapshot('${esc(d.name)}')">📸</button>
+            <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}')">Edit</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteDataset('${esc(d.name)}')">Delete</button>
+          </div>` : ''}
+      </td>
+    </tr>`;
+}
+
+const _dsCollapsed = new Map(); // poolName → bool
+
+function toggleDsSection(poolName) {
+  _dsCollapsed.set(poolName, !_dsCollapsed.get(poolName));
+  const tableEl   = document.getElementById('ds-table-' + CSS.escape(poolName));
+  const chevronEl = document.getElementById('ds-chevron-' + CSS.escape(poolName));
+  const collapsed = _dsCollapsed.get(poolName);
+  if (tableEl)   tableEl.style.display   = collapsed ? 'none' : '';
+  if (chevronEl) chevronEl.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+
 function renderDatasets(el) {
   if (!datasetCache.length) {
     el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📁</div><h3>No datasets yet</h3><p>Create your first dataset to get started.</p></div>';
     return;
   }
 
-  const rows = datasetCache.map(d => {
-    const indent = d.depth * 24;
-    const isRoot = d.depth === 0;
-    return `
-      <tr>
-        <td>
-          <div style="display:flex;align-items:center;gap:8px;padding-left:${indent}px;cursor:pointer;" onclick="openDatasetDetail('${esc(d.name)}')">
-            <span style="opacity:.5;font-size:13px;">${isRoot ? '🗄' : '📁'}</span>
-            <div>
-              <div style="font-weight:600;">${esc(d.short_name)}</div>
-              ${d.depth>0 ? `<div class="text-3 text-xs">${esc(d.name)}</div>` : ''}
-            </div>
-          </div>
-        </td>
-        <td style="font-family:monospace;font-size:13px;">${fmtBytes(d.used)}</td>
-        <td style="font-family:monospace;font-size:13px;">${d.quota > 0 ? fmtBytes(d.quota) : 'none'}</td>
-        <td style="font-size:13px;">${esc(d.compression)} <span class="text-3">${esc(d.compress_ratio)}</span></td>
-        <td style="font-size:12px;color:var(--text-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d.comment||'')}">${d.comment ? esc(d.comment) : '<span style="color:var(--text-3);">—</span>'}</td>
-        <td>
-          ${!isRoot && currentUser.role==='admin' ? `
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-ghost btn-sm" onclick="openCreateSnapshot('${esc(d.name)}')">📸</button>
-              <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}')">Edit</button>
-              <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteDataset('${esc(d.name)}')">Delete</button>
-            </div>` : ''}
-        </td>
-      </tr>`;
+  // Group by pool root (first path segment).
+  const poolNames = [...new Set(datasetCache.map(d => d.name.split('/')[0]))];
+  const multiPool = poolNames.length > 1;
+
+  const sections = poolNames.map(poolName => {
+    const collapsed = !!_dsCollapsed.get(poolName);
+    const poolDs = datasetCache.filter(d => d.name.split('/')[0] === poolName && d.depth > 0);
+    const showComment = poolDs.some(d => d.comment && d.comment.trim());
+    const rows = poolDs.map(d => _datasetRow(d, showComment)).join('');
+    const header = multiPool ? `
+      <div onclick="toggleDsSection('${esc(poolName)}')"
+           style="display:flex;align-items:center;gap:8px;margin:20px 0 8px;cursor:pointer;user-select:none;">
+        <svg id="ds-chevron-${esc(poolName)}" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round"
+             style="color:var(--text-3);transition:transform .15s;transform:rotate(${collapsed ? '-90' : '0'}deg)">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <span style="font-size:14px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;">🗄 ${esc(poolName)}</span>
+      </div>` : '';
+    const tableContent = rows
+      ? `<table><thead><tr><th>Dataset</th><th>Used</th><th>Quota</th><th>Compression</th>${showComment ? '<th>Comment</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>`
+      : `<div style="padding:16px 0;color:var(--text-3);font-size:13px;">No datasets yet.</div>`;
+    return `${header}<div id="ds-table-${esc(poolName)}" class="table-wrap" style="${collapsed ? 'display:none' : ''}">${tableContent}</div>`;
   }).join('');
 
-  el.innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Dataset</th><th>Used</th><th>Quota</th><th>Compression</th><th>Comment</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+  el.innerHTML = sections;
 }
 
 function openCreateDataset() {
   document.getElementById('modal-create-dataset').classList.remove('hidden');
-  document.getElementById('cds-parent').innerHTML =
-    (datasetCache || []).map(d => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+  const allDs = datasetCache || [];
+  const poolNames = [...new Set(allDs.map(d => d.name.split('/')[0]))];
+  document.getElementById('cds-parent').innerHTML = poolNames.length > 1
+    ? poolNames.map(pn => {
+        const opts = allDs.filter(d => d.name.split('/')[0] === pn)
+          .map(d => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+        return `<optgroup label="${esc(pn)}">${opts}</optgroup>`;
+      }).join('')
+    : allDs.map(d => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
   document.getElementById('cds-alert').classList.add('hidden');
   document.getElementById('cds-name').value = '';
   document.getElementById('cds-quota-amount').value = '0';
@@ -4625,17 +5378,51 @@ async function submitCreateDataset(e) {
   refreshActivityBar();
 }
 
-async function deleteDataset(name) {
-  if (!confirm(`Delete dataset "${name}"?\n\nThis will fail if it has children or snapshots.`)) return;
+let _deleteDatasetPending = null;
+
+function deleteDataset(name) {
+  _deleteDatasetPending = name;
+  document.getElementById('delete-dataset-name').textContent = name;
+  document.getElementById('delete-dataset-alert').classList.add('hidden');
+  const btn = document.getElementById('btn-delete-dataset-confirm');
+  btn.disabled = false;
+  btn.textContent = 'Delete';
+  document.getElementById('modal-delete-dataset').classList.remove('hidden');
+}
+
+function closeDeleteDatasetModal() {
+  document.getElementById('modal-delete-dataset').classList.add('hidden');
+  _deleteDatasetPending = null;
+}
+
+async function confirmDeleteDataset() {
+  const name = _deleteDatasetPending;
+  if (!name) return;
+  const btn     = document.getElementById('btn-delete-dataset-confirm');
+  const alertEl = document.getElementById('delete-dataset-alert');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  alertEl.classList.add('hidden');
+
   const resp = await fetch('/api/datasets/' + encodeURIComponent(name), {method:'DELETE'});
   const data = await resp.json();
-  if (resp.ok) { await refreshPoolBar(); loadDatasets(); return; }
+
+  if (resp.ok) {
+    closeDeleteDatasetModal();
+    await refreshPoolBar();
+    loadDatasets();
+    return;
+  }
 
   const errMsg = data.error || 'Failed to delete dataset.';
   if (errMsg.toLowerCase().includes('children') || errMsg.includes('-r')) {
+    closeDeleteDatasetModal();
     openRecursiveDeleteModal(name);
   } else {
-    alert(errMsg);
+    alertEl.textContent = errMsg;
+    alertEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Delete';
   }
 }
 
@@ -4931,36 +5718,58 @@ function renderSnapshots(el, snaps) {
     return;
   }
 
-  // Group by dataset.
-  const grouped = {};
-  snaps.forEach(s => {
-    if (!grouped[s.dataset]) grouped[s.dataset] = [];
-    grouped[s.dataset].push(s);
-  });
+  // Determine pools present.
+  const poolNames = [...new Set(snaps.map(s => s.dataset.split('/')[0]))];
+  const multiPool = poolNames.length > 1;
 
-  el.innerHTML = Object.entries(grouped).map(([dataset, list]) => `
-    <div style="margin-bottom:20px;">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:2px solid var(--border);margin-bottom:8px;">
-        <span style="opacity:.6;">📁</span>
-        <span style="font-weight:700;font-size:15px;">${esc(dataset)}</span>
-        <span class="badge badge-readonly" style="margin-left:4px;">${list.length} snapshot${list.length!==1?'s':''}</span>
-        ${currentUser.role==='admin' ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openCreateSnapshot('${esc(dataset)}')">+ Snapshot</button>` : ''}
+  function renderPoolSnaps(poolName) {
+    const poolSnaps = snaps.filter(s => s.dataset.split('/')[0] === poolName);
+    // Group by dataset.
+    const grouped = {};
+    poolSnaps.forEach(s => {
+      if (!grouped[s.dataset]) grouped[s.dataset] = [];
+      grouped[s.dataset].push(s);
+    });
+    const body = Object.entries(grouped).map(([dataset, list]) => `
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:2px solid var(--border);margin-bottom:8px;">
+          <span style="opacity:.6;">📁</span>
+          <span style="font-weight:700;font-size:15px;">${esc(dataset)}</span>
+          <span class="badge badge-readonly" style="margin-left:4px;">${list.length} snapshot${list.length!==1?'s':''}</span>
+          ${currentUser.role==='admin' ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openCreateSnapshot('${esc(dataset)}')">+ Snapshot</button>` : ''}
+        </div>
+        ${list.slice().reverse().map(s => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0 10px 24px;border-bottom:1px solid rgba(255,255,255,0.04);">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-1);flex-shrink:0;margin-right:4px;"></div>
+            <div style="flex:1;">
+              <div style="font-weight:600;font-size:14px;">${esc(s.snap_name)}</div>
+              <div class="text-3 text-xs">${formatDate(s.creation)} · Used: ${fmtBytes(s.used)} · Refer: ${fmtBytes(s.refer)}</div>
+            </div>
+            ${currentUser.role==='admin' ? `
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button class="btn btn-ghost btn-sm" onclick="restoreSnapshot('${esc(s.name)}','${esc(s.dataset)}')">Restore</button>
+                <button class="btn btn-ghost btn-sm" onclick="cloneSnapshot('${esc(s.name)}')">Clone</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteSnapshot('${esc(s.name)}')">Delete</button>
+              </div>` : ''}
+          </div>`).join('')}
+      </div>`).join('');
+
+    if (!multiPool) return body;
+    return `
+      <div style="display:flex;align-items:center;gap:8px;margin:20px 0 8px;cursor:pointer;user-select:none;"
+           onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('svg').style.transform=this.nextElementSibling.style.display==='none'?'rotate(-90deg)':'';">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+             style="color:var(--text-3);transition:transform .15s;">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <span style="font-size:14px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;">🗄 ${esc(poolName)}</span>
+        <span class="badge badge-readonly">${poolSnaps.length} snapshot${poolSnaps.length!==1?'s':''}</span>
       </div>
-      ${list.slice().reverse().map(s => `
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0 10px 24px;border-bottom:1px solid rgba(255,255,255,0.04);">
-          <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-1);flex-shrink:0;margin-right:4px;"></div>
-          <div style="flex:1;">
-            <div style="font-weight:600;font-size:14px;">${esc(s.snap_name)}</div>
-            <div class="text-3 text-xs">${formatDate(s.creation)} · Used: ${fmtBytes(s.used)} · Refer: ${fmtBytes(s.refer)}</div>
-          </div>
-          ${currentUser.role==='admin' ? `
-            <div style="display:flex;gap:6px;flex-shrink:0;">
-              <button class="btn btn-ghost btn-sm" onclick="restoreSnapshot('${esc(s.name)}','${esc(s.dataset)}')">Restore</button>
-              <button class="btn btn-ghost btn-sm" onclick="cloneSnapshot('${esc(s.name)}')">Clone</button>
-              <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteSnapshot('${esc(s.name)}')">Delete</button>
-            </div>` : ''}
-        </div>`).join('')}
-    </div>`).join('');
+      <div>${body}</div>`;
+  }
+
+  el.innerHTML = poolNames.map(renderPoolSnaps).join('');
 }
 
 function openCreateSnapshot(dataset) {
@@ -5007,14 +5816,46 @@ async function cloneSnapshot(name) {
   else alert(data.error || 'Clone failed.');
 }
 
-async function deleteSnapshot(name) {
-  if (!confirm(`Delete snapshot:\n${name}`)) return;
+let _deleteSnapshotPending = null;
+
+function deleteSnapshot(name) {
+  _deleteSnapshotPending = name;
+  document.getElementById('delete-snapshot-name').textContent = name;
+  document.getElementById('delete-snapshot-alert').classList.add('hidden');
+  const btn = document.getElementById('btn-delete-snapshot-confirm');
+  btn.disabled = false;
+  btn.textContent = 'Delete';
+  document.getElementById('modal-delete-snapshot').classList.remove('hidden');
+}
+
+function closeDeleteSnapshotModal() {
+  document.getElementById('modal-delete-snapshot').classList.add('hidden');
+  _deleteSnapshotPending = null;
+}
+
+async function confirmDeleteSnapshot() {
+  const name = _deleteSnapshotPending;
+  if (!name) return;
+  const btn     = document.getElementById('btn-delete-snapshot-confirm');
+  const alertEl = document.getElementById('delete-snapshot-alert');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  alertEl.classList.add('hidden');
+
   const resp = await fetch('/api/snapshots/delete', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({name}),
   });
   const data = await resp.json();
-  if (resp.ok) loadSnapshots(); else alert(data.error || 'Delete failed.');
+  if (resp.ok) {
+    closeDeleteSnapshotModal();
+    loadSnapshots();
+  } else {
+    alertEl.textContent = data.error || 'Delete failed.';
+    alertEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+  }
 }
 
 function openDatasetDetail(name) {
@@ -5138,27 +5979,33 @@ function renderDisks(el, disks) {
   //   /dev/sdb1   → /dev/sdb   (SATA/SAS)
   //   /dev/nvme0n1p1 → /dev/nvme0n1  (NVMe partition)
   //   /dev/nvme0n1   → /dev/nvme0n1  (NVMe disk — no change)
-  const stripPart = p => {
-    if (/\/nvme\d+n\d+p\d+$/.test(p)) return p.replace(/p\d+$/, ''); // NVMe partition
-    if (/\/sd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');  // SATA/SAS partition
-    if (/\/hd[a-z]+\d+$/.test(p))     return p.replace(/\d+$/, '');  // IDE partition
-    return p;
-  };
+  // Build device sets from ALL pools so disks in any pool are correctly classified.
   const poolDevices = new Set(
-    [
-      ...((poolData && poolData.members)        ? poolData.members        : []),
-      ...((poolData && poolData.member_devices) ? poolData.member_devices : []),
-    ].map(stripPart)
+    allPoolsData.flatMap(p => [
+      ...(p.members        || []),
+      ...(p.member_devices || []),
+    ]).map(stripPart)
   );
   const cacheDevices = new Set(
-    [
-      ...((poolData && poolData.cache_devs)     ? poolData.cache_devs     : []),
-      ...((poolData && poolData.cache_devices)  ? poolData.cache_devices  : []),
-    ].map(stripPart)
+    allPoolsData.flatMap(p => [
+      ...(p.cache_devs    || []),
+      ...(p.cache_devices || []),
+    ]).map(stripPart)
   );
-  const poolName  = poolData ? poolData.name : '';
   const isZfsDisk  = d => poolDevices.has(d.device)  || poolDevices.has('/dev/' + d.name);
   const isCacheDisk = d => cacheDevices.has(d.device) || cacheDevices.has('/dev/' + d.name);
+
+  // Per-disk pool lookup: find which pool owns this disk.
+  function diskOwnerPool(d) {
+    for (const p of allPoolsData) {
+      const devs = new Set([
+        ...(p.members        || []).map(stripPart),
+        ...(p.member_devices || []).map(stripPart),
+      ]);
+      if (devs.has(d.device) || devs.has('/dev/' + d.name)) return p.name;
+    }
+    return poolData ? poolData.name : '';
+  }
 
   // Disks without vendor+model are likely virtual/OS block devices.
   const hasIdentity = d => !!(d.vendor || d.model);
@@ -5185,7 +6032,7 @@ function renderDisks(el, disks) {
     html += '<div class="table-wrap" style="margin-bottom:28px;"><table>';
     html += diskTableHeaderWithPool();
     html += '<tbody>';
-    html += zfsAssigned.map(d => diskRowWithPool(d, poolName)).join('');
+    html += zfsAssigned.map(d => diskRowWithPool(d, diskOwnerPool(d))).join('');
     html += cacheDiskList.map(d => diskRowWithPool(d, '⚡ Cache')).join('');
     html += '</tbody></table></div>';
   }
@@ -5354,11 +6201,12 @@ function renderShares(el, shares) {
     return;
   }
 
+  const showComment = shares.some(s => s.comment && s.comment.trim());
   const rows = shares.map((s, i) => `
     <tr>
       <td style="font-weight:600;">${esc(s.name)}</td>
       <td style="font-family:monospace;font-size:12px;">${esc(s.path)}</td>
-      <td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>
+      ${showComment ? `<td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>` : ''}
       <td>
         ${s.read_only
           ? '<span class="badge badge-readonly">Read-only</span>'
@@ -5381,7 +6229,7 @@ function renderShares(el, shares) {
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Share Name</th><th>Path</th><th>Comment</th>
+          <th>Share Name</th><th>Path</th>${showComment ? '<th>Comment</th>' : ''}
           <th>Access</th><th>Users</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -5514,6 +6362,18 @@ function toggleShareRecycle() {
   document.getElementById('share-recycle-days-wrap').classList.toggle('hidden', !document.getElementById('share-recycle').checked);
 }
 
+(function() {
+  // Rotate the ▶ arrow when the Advanced Settings <details> opens/closes.
+  document.addEventListener('DOMContentLoaded', () => {
+    const det = document.querySelector('#modal-share details');
+    if (!det) return;
+    const arrow = document.getElementById('share-adv-arrow');
+    det.addEventListener('toggle', () => {
+      if (arrow) arrow.style.transform = det.open ? 'rotate(90deg)' : '';
+    });
+  });
+})();
+
 function closeShareModal() {
   document.getElementById('modal-share').classList.add('hidden');
   shareEditName = null;
@@ -5523,6 +6383,11 @@ async function submitShare(e) {
   e.preventDefault();
   const alertEl = document.getElementById('share-alert');
   alertEl.classList.add('hidden');
+  const submitBtn = document.getElementById('share-submit-btn');
+  const isEdit = shareEditName !== null;
+  const origLabel = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = isEdit ? 'Saving…' : 'Creating…';
 
   const name     = document.getElementById('share-name').value.trim();
   const path     = document.getElementById('share-path').value.trim();
@@ -5547,7 +6412,6 @@ async function submitShare(e) {
     durable_handles: durableHandles, apple_encoding: appleEncoding,
     allowed_hosts: allowedHosts, hosts_deny: hostsDeny,
   };
-  const isEdit = shareEditName !== null;
   const url    = isEdit ? '/api/shares/' + encodeURIComponent(shareEditName) : '/api/shares';
   const method = isEdit ? 'PUT' : 'POST';
 
@@ -5558,6 +6422,8 @@ async function submitShare(e) {
   });
   const data = await resp.json();
   if (!resp.ok) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = origLabel;
     alertEl.textContent = data.error || 'Failed to save share.';
     alertEl.classList.remove('hidden');
     return;
@@ -5566,12 +6432,49 @@ async function submitShare(e) {
   loadShares();
 }
 
-async function deleteShare(name) {
-  if (!confirm(`Delete share "${name}"?\n\nThis removes network access — no data is deleted.`)) return;
-  const resp = await fetch('/api/shares/' + encodeURIComponent(name), { method: 'DELETE' });
-  const data = await resp.json();
-  if (resp.ok) loadShares();
-  else alert(data.error || 'Failed to delete share.');
+let _deleteSharePending = null; // {type:'smb'|'nfs', name, id}
+
+function deleteShare(name) {
+  _deleteSharePending = { type: 'smb', name };
+  document.getElementById('delete-share-name').textContent = name;
+  document.getElementById('delete-share-alert').classList.add('hidden');
+  document.getElementById('btn-delete-share-confirm').disabled = false;
+  document.getElementById('btn-delete-share-confirm').textContent = 'Delete';
+  document.getElementById('modal-delete-share').classList.remove('hidden');
+}
+
+function closeDeleteShareModal() {
+  document.getElementById('modal-delete-share').classList.add('hidden');
+  _deleteSharePending = null;
+}
+
+async function confirmDeleteShare() {
+  if (!_deleteSharePending) return;
+  const btn     = document.getElementById('btn-delete-share-confirm');
+  const alertEl = document.getElementById('delete-share-alert');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+  alertEl.classList.add('hidden');
+
+  const p = _deleteSharePending;
+  let resp, data;
+  if (p.type === 'smb') {
+    resp = await fetch('/api/shares/' + encodeURIComponent(p.name), { method: 'DELETE' });
+    data = await resp.json();
+  } else {
+    resp = await fetch(`/api/nfs/shares/${p.id}`, { method: 'DELETE' });
+    data = resp.ok ? {} : await resp.json();
+  }
+
+  if (resp.ok) {
+    closeDeleteShareModal();
+    if (p.type === 'smb') loadShares(); else loadNFSShares();
+  } else {
+    alertEl.textContent = data.error || 'Failed to delete share.';
+    alertEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+  }
 }
 
 // ===== NFS Shares =====
@@ -5629,6 +6532,7 @@ function renderNFSShares(el, shares) {
     return;
   }
 
+  const showComment = shares.some(s => s.comment && s.comment.trim());
   const rows = shares.map((s, i) => `
     <tr>
       <td style="font-family:monospace;font-size:12px;">${esc(s.path)}</td>
@@ -5637,7 +6541,7 @@ function renderNFSShares(el, shares) {
         ? '<span class="badge badge-readonly">Read-only</span>'
         : '<span class="badge badge-ok">Read/Write</span>'}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--text-2);">${nfsOptsDisplay(s)}</td>
-      <td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>
+      ${showComment ? `<td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>` : ''}
       <td>${currentUser.role==='admin' ? `
         <div style="display:flex;gap:6px;">
           <button class="btn btn-ghost btn-sm" onclick="openEditNFSShare(${i})">Edit</button>
@@ -5649,7 +6553,7 @@ function renderNFSShares(el, shares) {
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Path</th><th>Client</th><th>Access</th><th>Options</th><th>Comment</th><th></th>
+          <th>Path</th><th>Client</th><th>Access</th><th>Options</th>${showComment ? '<th>Comment</th>' : ''}<th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -5752,15 +6656,15 @@ async function submitNFSShare(e) {
   loadNFSShares();
 }
 
-async function deleteNFSShare(id) {
-  if (!confirm('Remove this NFS share?')) return;
-  const resp = await fetch(`/api/nfs/shares/${id}`, { method: 'DELETE' });
-  if (!resp.ok) {
-    const data = await resp.json();
-    alert(data.error || 'Failed to delete NFS share.');
-    return;
-  }
-  loadNFSShares();
+function deleteNFSShare(id) {
+  const share = _nfsSharesCache.find(s => s.id === id);
+  const label = share ? share.path : id;
+  _deleteSharePending = { type: 'nfs', name: label, id };
+  document.getElementById('delete-share-name').textContent = label;
+  document.getElementById('delete-share-alert').classList.add('hidden');
+  document.getElementById('btn-delete-share-confirm').disabled = false;
+  document.getElementById('btn-delete-share-confirm').textContent = 'Delete';
+  document.getElementById('modal-delete-share').classList.remove('hidden');
 }
 
 // ===== Helpers =====
@@ -6091,6 +6995,7 @@ async function controlSMB(action) {
     });
   } catch {}
   loadShares(); // re-fetch status + update banner
+  updateServiceNavDots();
 }
 
 async function controlNFS(action) {
@@ -6102,6 +7007,7 @@ async function controlNFS(action) {
     });
   } catch {}
   loadNFSShares(); // re-fetch status + update banner
+  updateServiceNavDots();
 }
 
 // ===== Disk I/O charts =====
@@ -6110,6 +7016,7 @@ let _ioCharts = null; // { read, write, busy } Chart instances
 let _ioDevices = [];  // ordered list of device names
 let _ioBufs = {};     // device → { read: Float32Array, write: Float32Array, busy: Float32Array }
 let _ioPollTimer = null;
+let _ioCurrentPoolDevs = null; // Set of short device names for the selected top-bar pool (null = all)
 
 // Palette: one colour per device (cycles if > 8 disks)
 const IO_COLORS = [
@@ -6161,6 +7068,20 @@ function _ioChartOptions(yLabel) {
       },
     },
   };
+}
+
+function resetIOCharts() {
+  if (_ioCharts) {
+    _ioCharts.read && _ioCharts.read.destroy();
+    _ioCharts.write && _ioCharts.write.destroy();
+    _ioCharts.busy && _ioCharts.busy.destroy();
+    _ioCharts = null;
+  }
+  _ioDevices = [];
+  _ioBufs = {};
+  // Remove visibility class so initIOCharts() is called again after pool switch.
+  const ioBar = document.getElementById('io-bar');
+  if (ioBar) ioBar.classList.remove('io-bar-visible');
 }
 
 function initIOCharts() {
@@ -6250,14 +7171,23 @@ async function _fetchDiskIO() {
     const resp = await fetch('/api/sysinfo/diskio');
     if (!resp.ok) return;
     const data = await resp.json();
-    const hasDevs = data.devices && Object.keys(data.devices).length > 0;
+    // Filter devices to those belonging to the selected top-bar pool.
+    let ioData = data;
+    if (_ioCurrentPoolDevs && _ioCurrentPoolDevs.size > 0 && data.devices) {
+      const filtered = {};
+      for (const [k, v] of Object.entries(data.devices)) {
+        if (_ioCurrentPoolDevs.has(k)) filtered[k] = v;
+      }
+      ioData = { ...data, devices: filtered };
+    }
+    const hasDevs = ioData.devices && Object.keys(ioData.devices).length > 0;
     const bar = document.getElementById('io-bar');
     if (hasDevs) {
       if (bar && !bar.classList.contains('io-bar-visible')) {
         bar.classList.add('io-bar-visible');
-        initIOCharts();
       }
-      updateIOCharts(data);
+      initIOCharts();
+      updateIOCharts(ioData);
     }
   } catch (_) {}
 }
@@ -6265,15 +7195,31 @@ async function _fetchDiskIO() {
 function startIOPoller() {
   if (_ioPollTimer) return;
   _fetchDiskIO(); // immediate first fetch
-  _ioPollTimer = setInterval(_fetchDiskIO, 5000);
+  _ioPollTimer = setInterval(_fetchDiskIO, 3000);
 }
 
 // ===== Dashboard 24h RRD Charts =====
 async function loadDashboard() {
   if (_dashRefreshTimer) clearInterval(_dashRefreshTimer);
   _loadDashStats();
+  _loadHardwareInfo();
   await _fetchDashboardMetrics();
   _dashRefreshTimer = setInterval(() => { _loadDashStats(); _fetchDashboardMetrics(); }, 5 * 60 * 1000);
+}
+
+async function _loadHardwareInfo() {
+  try {
+    const r = await fetch('/api/sysinfo/hardware');
+    if (!r.ok) return;
+    const hw = await r.json();
+    const cpuEl = document.getElementById('dash-hw-cpu');
+    const memEl = document.getElementById('dash-hw-mem');
+    if (cpuEl && hw.cpu_cores > 0) cpuEl.textContent = hw.cpu_cores + ' cores ·';
+    if (memEl && hw.total_ram_bytes > 0) {
+      const gb = (hw.total_ram_bytes / (1024 * 1024 * 1024)).toFixed(1);
+      memEl.textContent = gb + ' GB ·';
+    }
+  } catch (_) {}
 }
 
 async function _loadDashStats() {
@@ -6623,8 +7569,13 @@ document.addEventListener('click', function(e) {
     'modal-add-disks':        closeAddDisksModal,
     'modal-confirm-create-pool':  closeCreatePoolConfirm,
     'modal-add-capacity-guide':   closeAddCapacityGuide,
+    'modal-disk-offline':     closeDiskOfflineModal,
+    'modal-pool-fixer':       closePoolFixerWizard,
     'modal-destroy-pool':     closeDestroyPoolModal,
     'modal-force-import':     closeForceImportModal,
+    'modal-import-pool':      closeImportPoolModal,
+    'modal-delete-snapshot':  closeDeleteSnapshotModal,
+    'modal-delete-dataset':   closeDeleteDatasetModal,
     'modal-recursive-delete': closeRecursiveDeleteModal,
     'modal-dataset-detail':   closeDatasetDetail,
     'modal-pool-upgrade':     closePoolUpgradeModal,
@@ -6638,6 +7589,7 @@ document.addEventListener('click', function(e) {
     'modal-edit-dataset':     closeEditDataset,
     'modal-schedule':         closeScheduleModal,
     'modal-snapshot':         closeSnapshotModal,
+    'modal-delete-share':     closeDeleteShareModal,
     'modal-share':            closeShareModal,
     'modal-nfs-share':        closeNFSShareModal,
     'modal-install':          closeInstallModal,
@@ -6646,6 +7598,54 @@ document.addEventListener('click', function(e) {
   const fn = closeFns[e.target.id];
   if (fn) fn();
 });
+
+// ===== Info-tip floating tooltip =====
+(function() {
+  const box = document.getElementById('tip-box');
+  let hideTimer = null;
+  document.addEventListener('mouseover', e => {
+    const tip = e.target.closest('.info-tip');
+    if (!tip || !tip.dataset.tip) return;
+    clearTimeout(hideTimer);
+    box.textContent = tip.dataset.tip;
+    box.classList.add('tip-visible');
+    positionTip(tip);
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.target.closest('.info-tip')) return;
+    hideTimer = setTimeout(() => box.classList.remove('tip-visible'), 80);
+  });
+  document.addEventListener('mousemove', e => {
+    if (!box.classList.contains('tip-visible')) return;
+    const tip = e.target.closest('.info-tip');
+    if (tip) positionTip(tip);
+  });
+  function positionTip(tip) {
+    const r   = tip.getBoundingClientRect();
+    const vw  = window.innerWidth;
+    const vh  = window.innerHeight;
+    const w   = Math.min(320, vw - 24);
+    box.style.maxWidth = w + 'px';
+    // Prefer above; fall back to below if too close to top.
+    const spaceAbove = r.top - 12;
+    const spaceBelow = vh - r.bottom - 12;
+    let top;
+    if (spaceAbove >= 60 || spaceAbove >= spaceBelow) {
+      // above
+      box.style.top  = '';
+      top = r.top - box.offsetHeight - 8;
+      if (top < 8) top = r.bottom + 8;
+    } else {
+      // below
+      top = r.bottom + 8;
+    }
+    // Horizontal: center on icon, clamp to viewport.
+    let left = r.left + r.width / 2 - box.offsetWidth / 2;
+    left = Math.max(8, Math.min(vw - box.offsetWidth - 8, left));
+    box.style.left = left + 'px';
+    box.style.top  = top  + 'px';
+  }
+})();
 
 // ===== Theme toggle =====
 function applyTheme(theme) {

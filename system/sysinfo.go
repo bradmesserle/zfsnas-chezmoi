@@ -3,6 +3,7 @@ package system
 import (
 	"bufio"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ var (
 func StartDiskIOPoller() {
 	diskIOPrev = make(map[string]diskstatSample)
 	go func() {
-		tick := time.NewTicker(5 * time.Second)
+		tick := time.NewTicker(3 * time.Second)
 		defer tick.Stop()
 		for range tick.C {
 			poolDevs := poolMemberBaseNames()
@@ -86,6 +87,45 @@ func StartDiskIOPoller() {
 	}()
 }
 
+// HardwareInfo holds static hardware properties of the host.
+type HardwareInfo struct {
+	CPUCores    int    `json:"cpu_cores"`
+	TotalRAMBytes uint64 `json:"total_ram_bytes"`
+}
+
+// GetHardwareInfo reads CPU core count from /proc/cpuinfo and total RAM from /proc/meminfo.
+func GetHardwareInfo() HardwareInfo {
+	info := HardwareInfo{}
+
+	// CPU cores: count "processor" lines in /proc/cpuinfo
+	if f, err := os.Open("/proc/cpuinfo"); err == nil {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			if strings.HasPrefix(scanner.Text(), "processor") {
+				info.CPUCores++
+			}
+		}
+		f.Close()
+	}
+
+	// Total RAM from /proc/meminfo (value is in kB)
+	if f, err := os.Open("/proc/meminfo"); err == nil {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			fields := strings.Fields(scanner.Text())
+			if len(fields) >= 2 && fields[0] == "MemTotal:" {
+				if val, err := strconv.ParseUint(fields[1], 10, 64); err == nil {
+					info.TotalRAMBytes = val * 1024
+				}
+				break
+			}
+		}
+		f.Close()
+	}
+
+	return info
+}
+
 // GetDiskIOSnapshot returns the most-recently computed I/O snapshot.
 func GetDiskIOSnapshot() *DiskIOSnapshot {
 	diskIOMu.RLock()
@@ -93,22 +133,57 @@ func GetDiskIOSnapshot() *DiskIOSnapshot {
 	return diskIOLatest
 }
 
-// poolMemberBaseNames returns the kernel device names (e.g. "sda") for the
-// current ZFS pool's member devices (e.g. "/dev/sda" → "sda").
+// poolMemberBaseNames returns the kernel device names (e.g. "sda", "vdb") for ALL
+// ZFS pools' member devices so the IO poller captures data for every pool.
+// Uses `zpool status -P` for full paths, then resolves any by-partuuid/UUID
+// paths to real device names via lsblk/blkid.
 func poolMemberBaseNames() []string {
-	pool, err := GetPool()
-	if err != nil || pool == nil {
+	out, err := exec.Command("sudo", "zpool", "status", "-P").Output()
+	if err != nil || len(out) == 0 {
 		return nil
 	}
-	names := make([]string, 0, len(pool.Members))
-	for _, m := range pool.Members {
-		// Resolve symlinks (e.g. /dev/disk/by-partuuid/xxx → /dev/sda1)
-		// so we get the real kernel device name for /proc/diskstats lookups.
-		real, err := filepath.EvalSymlinks(m)
-		if err != nil {
-			real = m
+
+	validStates := map[string]bool{
+		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
+		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
+	}
+	vdevPrefixes := []string{"mirror-", "raidz2-", "raidz1-", "raidz-", "spare-", "log-", "cache-"}
+
+	seen := make(map[string]bool)
+	var names []string
+
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
 		}
-		names = append(names, diskBaseName(filepath.Base(real)))
+		name, state := fields[0], fields[1]
+		if !validStates[state] {
+			continue
+		}
+		if name == "NAME" {
+			continue
+		}
+		isVdev := false
+		for _, pfx := range vdevPrefixes {
+			if strings.HasPrefix(name, pfx) {
+				isVdev = true
+				break
+			}
+		}
+		if isVdev {
+			continue
+		}
+		real := resolveDevPath(name)
+		base := diskBaseName(filepath.Base(real))
+		// Skip anything that still looks like an unresolved UUID.
+		if base == "" || strings.Contains(base, "-") || len(base) > 20 {
+			continue
+		}
+		if !seen[base] {
+			seen[base] = true
+			names = append(names, base)
+		}
 	}
 	return names
 }
