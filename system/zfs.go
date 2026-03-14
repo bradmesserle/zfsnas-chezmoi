@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -22,12 +23,20 @@ type Pool struct {
 	UsableUsed  uint64   `json:"usable_used"`  // root dataset used (zfs list)
 	UsableAvail uint64   `json:"usable_avail"` // root dataset avail (zfs list)
 	Health      string   `json:"health"`
-	Members     []string `json:"members"`    // physical device paths in the pool
+	Members       []string `json:"members"`        // raw device paths as tracked by zpool (may be by-partuuid)
+	MemberDevices []string `json:"member_devices"` // resolved canonical /dev/sdX paths
+	MemberRoles   []string `json:"member_roles"`   // per-member vdev role: "stripe"|"mirror"|"raidz1"|"raidz2"
+	CacheDevs     []string `json:"cache_devs"`      // raw L2ARC cache paths (may be by-partuuid)
+	CacheDevices  []string `json:"cache_devices"`   // resolved canonical /dev/sdX paths
 	VdevType    string   `json:"vdev_type"`  // "stripe" | "mirror" | "raidz1" | "raidz2"
 	Operation   string   `json:"operation"`  // "" | "scrubbing" | "resilvering" | "expanding"
 	SizeStr     string   `json:"size_str"`
 	AllocStr    string   `json:"alloc_str"`
 	FreeStr     string   `json:"free_str"`
+	Compression string   `json:"compression"` // root dataset compression
+	Dedup       string   `json:"dedup"`        // root dataset dedup
+	Sync        string   `json:"sync"`         // root dataset sync
+	Atime       string   `json:"atime"`        // root dataset atime
 }
 
 // GetPool returns the single imported pool, or nil if none exists.
@@ -49,9 +58,11 @@ func GetPool() (*Pool, error) {
 	p.UsableUsed, p.UsableAvail = poolRootUsage(p.Name)
 	p.UsableSize = p.UsableUsed + p.UsableAvail
 	// Populate member devices from `zpool status -P`.
-	p.Members    = poolMembers(p.Name)
+	p.Members, p.MemberDevices, p.MemberRoles = poolMembers(p.Name)
+	p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
 	p.VdevType   = poolVdevType(p.Name)
 	p.Operation  = poolOperation(p.Name)
+	p.Compression, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
 	return p, nil
 }
 
@@ -90,42 +101,169 @@ func poolRootUsage(poolName string) (used, avail uint64) {
 	return
 }
 
-// poolMembers parses `zpool status -P` to return physical device paths.
-func poolMembers(poolName string) []string {
+// poolMembers parses `zpool status -P` to return physical device paths of
+// DATA vdevs only (excludes cache, log, and spare sections).
+// Returns (rawPaths, resolvedPaths, roles):
+//   - rawPaths: exactly as zpool reports (may be /dev/disk/by-partuuid/…)
+//   - resolvedPaths: canonical /dev/sdX equivalents
+//   - roles: per-disk vdev role — "stripe" | "mirror" | "raidz1" | "raidz2"
+func poolMembers(poolName string) (raw, resolved, roles []string) {
 	out, err := exec.Command("sudo", "zpool", "status", "-P", poolName).Output()
 	if err != nil {
-		return nil
+		return nil, nil, nil
 	}
-	var members []string
 	inConfig := false
+	inDataSection := true
+	skipSections := map[string]bool{"cache": true, "log": true, "spare": true}
 	validStates := map[string]bool{
 		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
 		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
 	}
-	skipPrefixes := []string{"raidz", "mirror-", "spare-", "log-", "cache-", "NAME"}
+	vdevPrefixes := []string{"mirror-", "raidz2-", "raidz1-", "raidz-", "spare-", "log-", "cache-"}
+
+	poolIndent := -1       // indent of the pool name line
+	currentRole := "stripe" // role assigned to devices under the current top-level vdev
+
+	countIndent := func(line string) int {
+		return len(line) - len(strings.TrimLeft(line, " \t"))
+	}
+
 	for _, line := range strings.Split(string(out), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "config:") {
 			inConfig = true
 			continue
 		}
-		if !inConfig || trimmed == "" || strings.HasPrefix(trimmed, "errors:") {
-			if strings.HasPrefix(trimmed, "errors:") {
-				break
-			}
+		if !inConfig {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "errors:") {
+			break
+		}
+		if trimmed == "" {
 			continue
 		}
 		fields := strings.Fields(trimmed)
+		indent := countIndent(line)
+
+		// Single-token line with no valid state = section header.
+		if len(fields) == 1 {
+			inDataSection = !skipSections[strings.ToLower(trimmed)]
+			continue
+		}
+		if len(fields) < 2 {
+			continue
+		}
+		name, state := fields[0], fields[1]
+
+		if !validStates[state] {
+			// Section header with extra tokens.
+			inDataSection = !skipSections[strings.ToLower(name)]
+			continue
+		}
+		if !inDataSection {
+			continue
+		}
+
+		// Pool name line: record its indent as the base level.
+		if name == poolName {
+			poolIndent = indent
+			continue
+		}
+		if poolIndent < 0 {
+			continue
+		}
+
+		// Top-level vdev group (mirror-0, raidz1-0, …) or direct top-level disk.
+		if indent == poolIndent+2 {
+			isVdev := false
+			for _, pfx := range vdevPrefixes {
+				if strings.HasPrefix(name, pfx) {
+					isVdev = true
+					switch {
+					case strings.HasPrefix(name, "mirror-"):
+						currentRole = "mirror"
+					case strings.HasPrefix(name, "raidz2-"):
+						currentRole = "raidz2"
+					default: // raidz1- or raidz-
+						currentRole = "raidz1"
+					}
+					break
+				}
+			}
+			if !isVdev {
+				// Direct top-level disk — it is a stripe vdev on its own.
+				raw = append(raw, name)
+				resolved = append(resolved, resolveDevPath(name))
+				roles = append(roles, "stripe")
+			}
+			continue
+		}
+
+		// Member of a vdev group (indent > poolIndent+2).
+		isVdevName := false
+		for _, pfx := range vdevPrefixes {
+			if strings.HasPrefix(name, pfx) {
+				isVdevName = true
+				break
+			}
+		}
+		if isVdevName || name == "NAME" {
+			continue
+		}
+		raw = append(raw, name)
+		resolved = append(resolved, resolveDevPath(name))
+		roles = append(roles, currentRole)
+	}
+	return raw, resolved, roles
+}
+
+// poolCacheDevs parses `zpool status -P` to return L2ARC cache device paths.
+// Returns (rawPaths, resolvedPaths): rawPaths are exactly as zpool reports;
+// resolvedPaths are the canonical /dev/sdX equivalents.
+func poolCacheDevs(poolName string) (raw, resolved []string) {
+	out, err := exec.Command("sudo", "zpool", "status", "-P", poolName).Output()
+	if err != nil {
+		return nil, nil
+	}
+	inConfig := false
+	inCache := false
+	validStates := map[string]bool{
+		"ONLINE": true, "DEGRADED": true, "FAULTED": true,
+		"OFFLINE": true, "REMOVED": true, "UNAVAIL": true,
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "config:") {
+			inConfig = true
+			continue
+		}
+		if !inConfig {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "errors:") {
+			break
+		}
+		if trimmed == "" {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) == 1 && !validStates[trimmed] {
+			inCache = trimmed == "cache"
+			continue
+		}
 		if len(fields) < 2 {
 			continue
 		}
 		name, state := fields[0], fields[1]
 		if !validStates[state] {
+			inCache = strings.ToLower(name) == "cache"
 			continue
 		}
-		if name == poolName {
+		if !inCache {
 			continue
 		}
+		skipPrefixes := []string{"raidz", "mirror-", "spare-", "log-", "cache-"}
 		skip := false
 		for _, pfx := range skipPrefixes {
 			if strings.HasPrefix(name, pfx) {
@@ -133,12 +271,37 @@ func poolMembers(poolName string) []string {
 				break
 			}
 		}
-		if skip {
+		if skip || name == poolName {
 			continue
 		}
-		members = append(members, resolveDevPath(name))
+		raw = append(raw, name)
+		resolved = append(resolved, resolveDevPath(name))
 	}
-	return members
+	return raw, resolved
+}
+
+// AddPoolCache adds a device as an L2ARC cache to the pool.
+// The device is first wiped and repartitioned (GPT, type BF01) so the pool
+// tracks it by stable PARTUUID.
+func AddPoolCache(poolName, device string) error {
+	puPath, err := PrepareZFSPartition(device)
+	if err != nil {
+		return fmt.Errorf("prepare %s: %w", device, err)
+	}
+	out, err := exec.Command("sudo", "zpool", "add", poolName, "cache", puPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// RemovePoolCache removes an L2ARC cache device from the pool.
+func RemovePoolCache(poolName, device string) error {
+	out, err := exec.Command("sudo", "zpool", "remove", poolName, device).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // resolveDevPath resolves symlinks (e.g. /dev/disk/by-id/... or
@@ -153,11 +316,63 @@ func resolveDevPath(p string) string {
 	return real
 }
 
+// PrepareZFSPartition wipes a disk and creates a single GPT partition of type
+// BF01 (FreeBSD ZFS) consuming the full disk.  It returns the
+// /dev/disk/by-partuuid/<uuid> path of the new partition, which is stable
+// even if the disk is later moved to a different port or controller.
+func PrepareZFSPartition(device string) (string, error) {
+	// Wipe any existing partition table.
+	if out, err := exec.Command("sudo", "sgdisk", "--zap-all", device).CombinedOutput(); err != nil {
+		return "", fmt.Errorf("sgdisk --zap-all %s: %s", device, strings.TrimSpace(string(out)))
+	}
+	// Create one partition: start=0 (first usable), end=0 (last usable), type BF01.
+	if out, err := exec.Command("sudo", "sgdisk", "-n", "1:0:0", "-t", "1:BF01", device).CombinedOutput(); err != nil {
+		return "", fmt.Errorf("sgdisk create partition on %s: %s", device, strings.TrimSpace(string(out)))
+	}
+	// Inform the kernel of the new partition table.
+	exec.Command("sudo", "partprobe", device).Run() //nolint
+	exec.Command("sudo", "udevadm", "settle", "--timeout=10").Run() //nolint
+
+	// Locate the new partition's by-partuuid symlink.
+	devName := filepath.Base(device) // e.g. "sda" or "nvme0n1"
+	const dir = "/dev/disk/by-partuuid"
+	for i := 0; i < 20; i++ { // up to 10 s
+		entries, err := os.ReadDir(dir)
+		if err == nil {
+			for _, entry := range entries {
+				link, err := filepath.EvalSymlinks(filepath.Join(dir, entry.Name()))
+				if err != nil {
+					continue
+				}
+				// The link target is a partition (e.g. /dev/sda1); strip the suffix.
+				if diskBaseName(filepath.Base(link)) == devName {
+					return filepath.Join(dir, entry.Name()), nil
+				}
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return "", fmt.Errorf("by-partuuid symlink not found for partition on %s", device)
+}
+
 // CreatePool creates a new ZFS pool.
+// Each device is first wiped and repartitioned (GPT, type BF01) so the pool
+// tracks the partition by its stable PARTUUID rather than by kernel device name.
 // layout: "stripe" | "mirror" | "raidz1" | "raidz2"
 // ashift: 9, 12, or 13
 // compression: "off" | "lz4" | "zstd"
-func CreatePool(name, layout string, ashift int, compression string, devices []string) error {
+// dedup: "off" | "on" | "verify"
+func CreatePool(name, layout string, ashift int, compression, dedup string, devices []string) error {
+	// Prepare each disk and collect the stable partuuid paths.
+	partuuidPaths := make([]string, 0, len(devices))
+	for _, dev := range devices {
+		puPath, err := PrepareZFSPartition(dev)
+		if err != nil {
+			return fmt.Errorf("prepare %s: %w", dev, err)
+		}
+		partuuidPaths = append(partuuidPaths, puPath)
+	}
+
 	args := []string{"zpool", "create",
 		"-o", fmt.Sprintf("ashift=%d", ashift),
 		"-O", "atime=off",
@@ -165,11 +380,14 @@ func CreatePool(name, layout string, ashift int, compression string, devices []s
 	if compression != "off" {
 		args = append(args, "-O", "compression="+compression)
 	}
+	if dedup != "" && dedup != "off" {
+		args = append(args, "-O", "dedup="+dedup)
+	}
 	args = append(args, name)
 	if layout == "mirror" || layout == "raidz1" || layout == "raidz2" {
 		args = append(args, layout)
 	}
-	args = append(args, devices...)
+	args = append(args, partuuidPaths...)
 	debugLog("zpool create: %v", args)
 	out, err := exec.Command("sudo", args...).CombinedOutput()
 	if err != nil {
@@ -346,6 +564,44 @@ func GetZFSVersion() (major, minor, patch int, err error) {
 	return
 }
 
+// poolRootProps fetches editable properties from the pool's root dataset.
+func poolRootProps(name string) (compression, dedup, sync_, atime string) {
+	out, err := exec.Command("sudo", "zfs", "get", "-Hp",
+		"compression,dedup,sync,atime", name).Output()
+	compression, dedup, sync_, atime = "lz4", "off", "standard", "off"
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) < 3 {
+			continue
+		}
+		switch f[1] {
+		case "compression":
+			compression = f[2]
+		case "dedup":
+			dedup = f[2]
+		case "sync":
+			sync_ = f[2]
+		case "atime":
+			atime = f[2]
+		}
+	}
+	return
+}
+
+// SetPoolProperties sets one or more ZFS properties on the pool's root dataset.
+func SetPoolProperties(poolName string, props map[string]string) error {
+	for k, v := range props {
+		out, err := exec.Command("sudo", "zfs", "set", k+"="+v, poolName).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("set %s=%s: %s", k, v, strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
+}
+
 // poolVdevType inspects `zpool status` and returns the top-level vdev type:
 // "raidz1", "raidz2", "mirror", or "stripe" (default when no named vdev is found).
 func poolVdevType(poolName string) string {
@@ -432,28 +688,61 @@ func getRaidzVdev(poolName string) string {
 	return ""
 }
 
+// prepareDevices calls PrepareZFSPartition on each device and returns the
+// resulting partuuid paths in the same order.
+func prepareDevices(devices []string) ([]string, error) {
+	paths := make([]string, 0, len(devices))
+	for _, dev := range devices {
+		p, err := PrepareZFSPartition(dev)
+		if err != nil {
+			return nil, fmt.Errorf("prepare %s: %w", dev, err)
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
 // GrowPoolRaidz adds devices to the pool's raidz vdev using `zpool attach`
-// (OpenZFS 2.4+ RAIDZ expansion). Falls back to zpool add for stripe pools.
+// (OpenZFS 2.2+ RAIDZ expansion). Falls back to zpool add for stripe pools.
 func GrowPoolRaidz(name string, devices []string) error {
+	puPaths, err := prepareDevices(devices)
+	if err != nil {
+		return err
+	}
 	vdev := getRaidzVdev(name)
 	if vdev == "" {
-		// Stripe pool — fall through to the regular add path.
-		return GrowPool(name, devices)
+		// Stripe pool — fall through to the regular add path (paths already prepared).
+		return growPoolRaw(name, puPaths)
 	}
-	for _, dev := range devices {
-		args := []string{"zpool", "attach", "-f", name, vdev, dev}
+	for _, p := range puPaths {
+		args := []string{"zpool", "attach", "-f", name, vdev, p}
 		debugLog("zpool attach (raidz expand): %v", args)
 		out, err := exec.Command("sudo", args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("attach %s: %s", dev, strings.TrimSpace(string(out)))
+			return fmt.Errorf("attach %s: %s", p, strings.TrimSpace(string(out)))
 		}
+	}
+	return nil
+}
+
+// growPoolRaw issues zpool add with already-prepared paths (no partition step).
+func growPoolRaw(name string, puPaths []string) error {
+	args := append([]string{"zpool", "add", "-f", name}, puPaths...)
+	debugLog("zpool add: %v", args)
+	out, err := exec.Command("sudo", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
 // GrowPool adds devices to an existing pool as a stripe vdev (zpool add).
 func GrowPool(name string, devices []string) error {
-	args := append([]string{"zpool", "add", "-f", name}, devices...)
+	puPaths, err := prepareDevices(devices)
+	if err != nil {
+		return err
+	}
+	args := append([]string{"zpool", "add", "-f", name}, puPaths...)
 	debugLog("zpool add: %v", args)
 	out, err := exec.Command("sudo", args...).CombinedOutput()
 	if err != nil {
@@ -465,7 +754,11 @@ func GrowPool(name string, devices []string) error {
 // GrowPoolWithVdev adds devices to an existing pool as a specific vdev type.
 // vdev must be "mirror", "raidz1", or "raidz2".
 func GrowPoolWithVdev(name, vdev string, devices []string) error {
-	args := append([]string{"zpool", "add", "-f", name, vdev}, devices...)
+	puPaths, err := prepareDevices(devices)
+	if err != nil {
+		return err
+	}
+	args := append([]string{"zpool", "add", "-f", name, vdev}, puPaths...)
 	debugLog("zpool add vdev %s: %v", vdev, args)
 	out, err := exec.Command("sudo", args...).CombinedOutput()
 	if err != nil {
@@ -517,28 +810,48 @@ func ImportPoolForce(name string) error {
 
 // Dataset represents a ZFS filesystem dataset.
 type Dataset struct {
-	Name        string `json:"name"`
-	ShortName   string `json:"short_name"`
-	Used        uint64 `json:"used"`
-	Avail       uint64 `json:"avail"`
-	Refer       uint64 `json:"refer"`
-	Quota       uint64 `json:"quota"`    // 0 = none
-	RefQuota    uint64 `json:"refquota"` // 0 = none
-	Compression string `json:"compression"`
-	CompRatio   string `json:"compress_ratio"`
-	RecordSize  uint64 `json:"record_size"`
-	Mountpoint  string `json:"mountpoint"`
-	UsedStr     string `json:"used_str"`
-	AvailStr    string `json:"avail_str"`
-	QuotaStr    string `json:"quota_str"`
-	Depth       int    `json:"depth"` // 0 = pool root
+	Name             string `json:"name"`
+	ShortName        string `json:"short_name"`
+	Used             uint64 `json:"used"`
+	Avail            uint64 `json:"avail"`
+	Refer            uint64 `json:"refer"`
+	Quota            uint64 `json:"quota"`          // 0 = none
+	RefQuota         uint64 `json:"refquota"`       // 0 = none
+	Refreservation   uint64 `json:"refreservation"` // 0 = none
+	Compression      string `json:"compression"`
+	CompRatio        string `json:"compress_ratio"`
+	RecordSize       uint64 `json:"record_size"`
+	RecordSizeRaw    string `json:"record_size_raw"` // e.g. "128K" or "inherit"
+	Mountpoint       string `json:"mountpoint"`
+	Sync             string `json:"sync"`             // standard|always|disabled|inherit
+	Dedup            string `json:"dedup"`            // on|off|verify|inherit
+	CaseSensitivity  string `json:"case_sensitivity"` // sensitive|insensitive|mixed
+	Comment          string `json:"comment"`          // user property zfsnas:comment
+	UsedStr          string `json:"used_str"`
+	AvailStr         string `json:"avail_str"`
+	QuotaStr         string `json:"quota_str"`
+	RefreservationStr string `json:"refreservation_str"`
+	Depth            int    `json:"depth"` // 0 = pool root
+}
+
+// DatasetCreateOptions holds all properties for creating a new dataset.
+type DatasetCreateOptions struct {
+	Quota           uint64
+	QuotaType       string // "quota" or "refquota"
+	Refreservation  uint64
+	Compression     string
+	Sync            string
+	Dedup           string
+	CaseSensitivity string
+	RecordSize      string // raw ZFS value e.g. "128K", "inherit", ""
+	Comment         string
 }
 
 // ListDatasets returns all datasets under poolName as a flat list (pool root first).
 func ListDatasets(poolName string) ([]Dataset, error) {
 	out, err := exec.Command("sudo", "zfs", "list", "-Hp", "-r",
 		"-t", "filesystem",
-		"-o", "name,used,avail,refer,quota,refquota,compression,compressratio,recordsize,mountpoint",
+		"-o", "name,used,avail,refer,quota,refquota,compression,compressratio,recordsize,mountpoint,sync,dedup,casesensitivity,refreservation,zfsnas:comment",
 		poolName).Output()
 	if err != nil {
 		return nil, fmt.Errorf("zfs list failed: %w", err)
@@ -560,7 +873,7 @@ func ListDatasets(poolName string) ([]Dataset, error) {
 
 func parseDatasetLine(line, poolName string) (Dataset, error) {
 	f := strings.Split(line, "\t")
-	if len(f) < 10 {
+	if len(f) < 15 {
 		return Dataset{}, fmt.Errorf("unexpected zfs output: %q", line)
 	}
 	name := f[0]
@@ -573,42 +886,75 @@ func parseDatasetLine(line, poolName string) (Dataset, error) {
 	compRatio := f[7]
 	recordSize, _ := parseZFSNum(f[8])
 	mountpoint := f[9]
+	sync := f[10]
+	dedup := f[11]
+	caseSensitivity := f[12]
+	refreservation, _ := parseZFSNum(f[13])
+	comment := f[14]
+	if comment == "-" {
+		comment = ""
+	}
+
+	// Derive human-readable record size string.
+	recordSizeRaw := formatBytesShort(recordSize)
 
 	depth := strings.Count(name, "/") - strings.Count(poolName, "/")
 	parts := strings.Split(name, "/")
 	shortName := parts[len(parts)-1]
 
 	return Dataset{
-		Name:        name,
-		ShortName:   shortName,
-		Used:        used,
-		Avail:       avail,
-		Refer:       refer,
-		Quota:       quota,
-		RefQuota:    refquota,
-		Compression: compression,
-		CompRatio:   compRatio,
-		RecordSize:  recordSize,
-		Mountpoint:  mountpoint,
-		UsedStr:     formatBytes(used),
-		AvailStr:    formatBytes(avail),
-		QuotaStr:    zeroOrBytes(quota),
-		Depth:       depth,
+		Name:              name,
+		ShortName:         shortName,
+		Used:              used,
+		Avail:             avail,
+		Refer:             refer,
+		Quota:             quota,
+		RefQuota:          refquota,
+		Refreservation:    refreservation,
+		Compression:       compression,
+		CompRatio:         compRatio,
+		RecordSize:        recordSize,
+		RecordSizeRaw:     recordSizeRaw,
+		Mountpoint:        mountpoint,
+		Sync:              sync,
+		Dedup:             dedup,
+		CaseSensitivity:   caseSensitivity,
+		Comment:           comment,
+		UsedStr:           formatBytes(used),
+		AvailStr:          formatBytes(avail),
+		QuotaStr:          zeroOrBytes(quota),
+		RefreservationStr: zeroOrBytes(refreservation),
+		Depth:             depth,
 	}, nil
 }
 
-// CreateDataset creates a new ZFS filesystem.
-func CreateDataset(name string, quota uint64, quotaType, compression string) error {
+// CreateDataset creates a new ZFS filesystem with the given options.
+func CreateDataset(name string, opts DatasetCreateOptions) error {
 	args := []string{"zfs", "create"}
-	if quota > 0 {
+	if opts.Quota > 0 {
 		qt := "quota"
-		if quotaType == "refquota" {
+		if opts.QuotaType == "refquota" {
 			qt = "refquota"
 		}
-		args = append(args, "-o", fmt.Sprintf("%s=%d", qt, quota))
+		args = append(args, "-o", fmt.Sprintf("%s=%d", qt, opts.Quota))
 	}
-	if compression != "" && compression != "inherit" {
-		args = append(args, "-o", "compression="+compression)
+	if opts.Compression != "" && opts.Compression != "inherit" {
+		args = append(args, "-o", "compression="+opts.Compression)
+	}
+	if opts.Sync != "" && opts.Sync != "inherit" {
+		args = append(args, "-o", "sync="+opts.Sync)
+	}
+	if opts.Dedup != "" && opts.Dedup != "inherit" {
+		args = append(args, "-o", "dedup="+opts.Dedup)
+	}
+	if opts.CaseSensitivity != "" && opts.CaseSensitivity != "inherit" {
+		args = append(args, "-o", "casesensitivity="+opts.CaseSensitivity)
+	}
+	if opts.RecordSize != "" && opts.RecordSize != "inherit" {
+		args = append(args, "-o", "recordsize="+opts.RecordSize)
+	}
+	if opts.Refreservation > 0 {
+		args = append(args, "-o", fmt.Sprintf("refreservation=%d", opts.Refreservation))
 	}
 	args = append(args, name)
 	debugLog("zfs create: %v", args)
@@ -616,16 +962,32 @@ func CreateDataset(name string, quota uint64, quotaType, compression string) err
 	if err != nil {
 		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
 	}
+	// Set user property comment after creation (not supported as -o at create time).
+	if opts.Comment != "" {
+		if serr := SetDatasetProps(name, map[string]string{"zfsnas:comment": opts.Comment}); serr != nil {
+			debugLog("set comment failed: %v", serr)
+		}
+	}
 	return nil
 }
 
 // SetDatasetProps sets one or more ZFS properties on a dataset.
+// A value of "" clears the property via `zfs inherit` (only meaningful for user properties).
 func SetDatasetProps(name string, props map[string]string) error {
 	for k, v := range props {
-		out, err := exec.Command("sudo", "zfs", "set",
-			fmt.Sprintf("%s=%s", k, v), name).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("zfs set %s=%s: %s", k, v, strings.TrimSpace(string(out)))
+		var out []byte
+		var err error
+		if v == "" {
+			out, err = exec.Command("sudo", "zfs", "inherit", k, name).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("zfs inherit %s: %s", k, strings.TrimSpace(string(out)))
+			}
+		} else {
+			out, err = exec.Command("sudo", "zfs", "set",
+				fmt.Sprintf("%s=%s", k, v), name).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("zfs set %s=%s: %s", k, v, strings.TrimSpace(string(out)))
+			}
 		}
 	}
 	return nil
@@ -766,4 +1128,27 @@ func zeroOrBytes(n uint64) string {
 		return "none"
 	}
 	return formatBytes(n)
+}
+
+// formatBytesShort converts a byte count to a ZFS-style compact string
+// e.g. 512→"512", 1024→"1K", 131072→"128K", 1048576→"1M".
+func formatBytesShort(b uint64) string {
+	if b == 0 {
+		return "inherit"
+	}
+	units := []struct {
+		div   uint64
+		label string
+	}{
+		{1024 * 1024 * 1024 * 1024, "T"},
+		{1024 * 1024 * 1024, "G"},
+		{1024 * 1024, "M"},
+		{1024, "K"},
+	}
+	for _, u := range units {
+		if b%u.div == 0 {
+			return fmt.Sprintf("%d%s", b/u.div, u.label)
+		}
+	}
+	return fmt.Sprintf("%d", b)
 }

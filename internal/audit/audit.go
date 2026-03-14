@@ -53,6 +53,7 @@ const (
 	ActionGrowPool      = "grow_pool"
 	ActionDestroyPool   = "destroy_pool"
 	ActionUpgradePool   = "upgrade_pool"
+	ActionUpdatePool    = "update_pool"
 	ActionSystemReboot  = "system_reboot"
 	ActionSystemShutdown = "system_shutdown"
 	ActionUpdateSettings = "update_settings"

@@ -41,7 +41,9 @@ body.light {
   --text-3:      #6c6c70;
   --shadow:      0 4px 24px rgba(0, 0, 0, 0.10);
   --shadow-lg:   0 8px 40px rgba(0, 0, 0, 0.18);
+  --accent-warn: #9a6200;
 }
+body.light .badge-smbonly { background: rgba(154,98,0,0.12); color: #9a6200; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -234,6 +236,7 @@ input::placeholder { color: var(--text-3); }
 /* ===== Auth layout (login / setup pages) ===== */
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -285,6 +288,7 @@ input::placeholder { color: var(--text-3); }
 .app-layout {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* iOS Safari: dynamic viewport excludes browser chrome */
   overflow: hidden;
 }
 

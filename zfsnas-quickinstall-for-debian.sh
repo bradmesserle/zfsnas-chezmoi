@@ -69,15 +69,52 @@ else
 
       # ── Ensure contrib is in sources (Debian only) ──────────────────────────
       if [[ "${DISTRO}" == "debian" ]]; then
-        _SOURCES_FILE="/etc/apt/sources.list"
-        # Check any .list file under sources.list.d as well
-        if grep -rqE '^\s*deb\b.*\bcontrib\b' "${_SOURCES_FILE}" /etc/apt/sources.list.d/ 2>/dev/null; then
+        # Debian 13+ uses DEB822 format (.sources files with "Components:" lines).
+        # Older Debian / Ubuntu use the traditional one-liner format in sources.list
+        # and .list files.  We handle both.
+
+        # Check if contrib is already present anywhere.
+        _contrib_found=false
+        # DEB822 format: "Components: main contrib …"
+        if grep -rqE '^\s*Components:.*\bcontrib\b' /etc/apt/sources.list.d/ 2>/dev/null; then
+          _contrib_found=true
+        fi
+        # Traditional format: "deb … contrib"
+        if grep -rqE '^\s*(deb|deb-src)\b.*\bcontrib\b' \
+             /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
+          _contrib_found=true
+        fi
+
+        if [[ "${_contrib_found}" == "true" ]]; then
           success "contrib is already enabled in apt sources"
         else
-          warn "contrib component not found — adding it to ${_SOURCES_FILE}"
-          # Append contrib to every non-commented deb / deb-src line that lacks it
-          sed -i -E '/^\s*(deb|deb-src)\b/{/\bcontrib\b/!s/$/ contrib/}' "${_SOURCES_FILE}"
-          success "contrib added to ${_SOURCES_FILE}"
+          warn "contrib component not found — adding it to apt sources"
+          _patched=false
+
+          # ── DEB822 .sources files (Debian 13+) ───────────────────────────
+          for _sf in /etc/apt/sources.list.d/*.sources; do
+            [[ -f "${_sf}" ]] || continue
+            # Append "contrib" to every "Components:" line that does not already have it
+            sed -i '/^Components:/{/\bcontrib\b/!s/$/ contrib/}' "${_sf}"
+            _patched=true
+            info "  Updated: ${_sf}"
+          done
+
+          # ── Traditional one-liner format ──────────────────────────────────
+          for _lf in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+            [[ -f "${_lf}" ]] || continue
+            if grep -qE '^\s*(deb|deb-src)\b' "${_lf}" 2>/dev/null; then
+              sed -i -E '/^\s*(deb|deb-src)\b/{/\bcontrib\b/!s/$/ contrib/}' "${_lf}"
+              _patched=true
+              info "  Updated: ${_lf}"
+            fi
+          done
+
+          if [[ "${_patched}" == "true" ]]; then
+            success "contrib added to apt sources"
+          else
+            warn "Could not locate any apt source files to patch — you may need to add 'contrib' manually."
+          fi
         fi
       fi
 

@@ -191,7 +191,7 @@
       <a id="app-version" href="https://github.com/macgaver/zfsnas-chezmoi/releases" target="_blank" rel="noopener"
          style="display:inline-block;margin-top:6px;font-size:11px;font-family:'SF Mono',monospace;color:var(--text-3);border:1px solid var(--border);padding:2px 8px;border-radius:10px;text-decoration:none;letter-spacing:.02em;">v…</a>
       <div id="sidebar-update-badge" onclick="showPage('updates')" class="hidden"
-           style="margin-top:5px;font-size:11px;font-weight:600;color:#ffd60a;cursor:pointer;padding:2px 8px;border-radius:10px;border:1px solid rgba(255,214,10,0.35);background:rgba(255,214,10,0.08);letter-spacing:.02em;">
+           style="margin-top:5px;font-size:11px;font-weight:600;color:var(--accent-warn);cursor:pointer;padding:2px 8px;border-radius:10px;border:1px solid rgba(255,214,10,0.35);background:rgba(255,214,10,0.08);letter-spacing:.02em;">
         ⬆ new version available
       </div>
     </div>
@@ -215,15 +215,7 @@
     <button class="nav-item" onclick="showPage('updates')"   id="nav-updates">  <span class="nav-icon">⬆</span><span class="nav-label"> Updates</span></button>
     <button class="nav-item" onclick="toggleTermPanel()"     id="nav-terminal"> <span class="nav-icon">⌨</span><span class="nav-label"> Terminal</span></button>
     <button class="nav-item" onclick="showPage('settings')"  id="nav-settings"> <span class="nav-icon">⚙</span><span class="nav-label"> Settings</span></button>
-
-    <div class="sidebar-section">Logs</div>
-    <button class="nav-item" onclick="showPage('activity')"  id="nav-activity"> <span class="nav-icon">📋</span><span class="nav-label"> Activity Log</span></button>
-
-    <div style="flex:1"></div>
-    <div class="sidebar-footer" style="padding:12px 20px 4px;border-top:1px solid var(--border);">
-      <button class="btn btn-ghost btn-sm w-full" onclick="openAbout()" style="margin-bottom:6px;">About / Support</button>
-      <button class="btn btn-ghost btn-sm w-full" onclick="logout()">Sign Out</button>
-    </div>
+    <button class="nav-item" onclick="openAbout()"            id="nav-about">    <span class="nav-icon">ℹ</span><span class="nav-label"> About / Support</span></button>
   </nav>
 
   <!-- ===== MAIN CONTENT ===== -->
@@ -234,10 +226,18 @@
       <div class="topbar-inner">
         <span class="topbar-title">Pool Capacity</span>
         <span id="pool-summary" class="text-sm text-2"></span>
-        <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" style="margin-left:auto;padding-left:12px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
-          <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
-          <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:2px;margin-left:auto;">
+          <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+            <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
+            <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <button onclick="showPage('activity')" id="nav-activity" title="Activity Log" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button onclick="logout()" title="Sign Out" style="padding:6px 8px;background:none;border:none;cursor:pointer;color:var(--text-2);display:flex;align-items:center;opacity:0.7;transition:opacity .15s;border-radius:var(--radius-sm);" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
       </div>
       <div class="pool-bar-container" id="pool-bar">
         <div style="display:flex;align-items:center;justify-content:center;width:100%;color:var(--text-3);font-size:13px;">
@@ -340,7 +340,7 @@
               </div>
               <div style="display:flex;gap:12px;margin-bottom:6px;">
                 <span style="font-size:11px;color:#64d2ff;">▬ Read</span>
-                <span style="font-size:11px;color:#ffd60a;">▬ Write</span>
+                <span style="font-size:11px;color:var(--accent-warn);">▬ Write</span>
               </div>
               <div style="position:relative;height:120px;"><canvas id="dash-chart-disk"></canvas></div>
             </div>
@@ -447,6 +447,7 @@
         <div class="card" id="activity-list">
           <div style="color:var(--text-3);text-align:center;padding:24px;">Loading…</div>
         </div>
+        <div id="audit-pagination" style="display:none;display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 0;"></div>
       </div>
 
       <!-- PHYSICAL DISKS -->
@@ -993,12 +994,89 @@
         <div class="stat-row"><span class="stat-label">Compression</span><span id="dsd-comp" class="stat-value"></span></div>
         <div class="stat-row"><span class="stat-label">Compress ratio</span><span id="dsd-ratio" class="stat-value"></span></div>
         <div class="stat-row"><span class="stat-label">Record size</span><span id="dsd-recsize" class="stat-value"></span></div>
+        <div class="stat-row"><span class="stat-label">Reservation</span><span id="dsd-refreserv" class="stat-value"></span></div>
+        <div class="stat-row"><span class="stat-label">Sync mode</span><span id="dsd-sync" class="stat-value"></span></div>
+        <div class="stat-row"><span class="stat-label">Deduplication</span><span id="dsd-dedup" class="stat-value"></span></div>
+        <div class="stat-row"><span class="stat-label">Case sensitivity</span><span id="dsd-case" class="stat-value"></span></div>
         <div class="stat-row"><span class="stat-label">Mountpoint</span><span id="dsd-mount" class="stat-value" style="font-family:'SF Mono',monospace;font-size:12px;word-break:break-all;"></span></div>
+        <div id="dsd-comment-row" class="stat-row" style="display:none;">
+          <span class="stat-label">Comment</span>
+          <span id="dsd-comment" class="stat-value" style="font-style:italic;word-break:break-word;"></span>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeDatasetDetail()">Close</button>
       <button class="btn btn-primary btn-sm" onclick="closeDatasetDetail();showPage('datasets')">Go to Datasets →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pool Cache Config Modal -->
+<!-- ===== Pool Settings Modal ===== -->
+<div class="modal-backdrop hidden" id="modal-pool-settings" onclick="if(event.target===this)closePoolSettingsModal()">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <h3>⚙ Pool Settings</h3>
+      <button class="modal-close" onclick="closePoolSettingsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="pool-settings-alert" class="alert alert-error hidden"></div>
+      <p class="text-2 text-sm" style="margin-bottom:20px;">These settings apply to the pool's root dataset and are inherited by all datasets unless overridden.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:8px;">Compression</label>
+          <div style="display:flex;flex-direction:column;gap:6px;" id="ps-compression-btns"></div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:8px;">Deduplication <i class="info-tip tip-down" data-tip="Deduplication eliminates duplicate data blocks. It saves space when data is highly repetitive but uses significant RAM (typically 5 GB per TB of pool data). Recommended only for specific workloads. Keep OFF unless you know you need it."></i></label>
+          <div style="display:flex;flex-direction:column;gap:6px;" id="ps-dedup-btns"></div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:8px;">Sync <i class="info-tip tip-down" data-tip="Controls when writes are committed to stable storage.&#10;&#10;Standard: respects application sync calls — safe default.&#10;Always: forces every write to disk immediately — safest but slowest.&#10;Disabled: ignores sync calls — fastest but risks data loss on power failure."></i></label>
+          <div style="display:flex;flex-direction:column;gap:6px;" id="ps-sync-btns"></div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:8px;">Access Time (atime) <i class="info-tip tip-down" data-tip="When enabled, ZFS updates the access timestamp on every file read. This causes extra write I/O and is rarely useful. Keeping atime OFF is recommended for NAS workloads."></i></label>
+          <div style="display:flex;flex-direction:column;gap:6px;" id="ps-atime-btns"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePoolSettingsModal()">Cancel</button>
+      <button class="btn btn-primary" id="btn-pool-settings-save" onclick="submitPoolSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="modal-cache-config">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3>⚡ L2ARC Cache Config</h3>
+      <button class="modal-close" onclick="closeCacheConfigModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:12px;">
+      <div style="background:rgba(48,209,88,0.10);border:1.5px solid rgba(48,209,88,0.45);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px;display:flex;gap:12px;align-items:flex-start;">
+        <span style="font-size:20px;flex-shrink:0;">ℹ️</span>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.6;">
+          <strong>L2ARC (Level 2 Adaptive Replacement Cache)</strong> is a read cache stored on a fast device (SSD or NVMe). ZFS automatically promotes hot data to L2ARC to reduce latency for repeated reads.<br><br>
+          <strong>Best disk type:</strong> NVMe or high-endurance SSD. Capacity ideally ≥ your working data set (not RAM). Low-endurance SSDs will wear out quickly under heavy random read workloads.<br><br>
+          <strong>Warning:</strong> Removing a cache device immediately evicts all its cached data — this does not cause data loss but may temporarily increase read latency.
+        </div>
+      </div>
+      <div id="cache-alert" class="alert alert-error hidden" style="margin-bottom:12px;"></div>
+      <h4 style="margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);">Current Cache Devices</h4>
+      <div id="cache-current-list" style="margin-bottom:18px;"></div>
+      <h4 style="margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);">Add Cache Device</h4>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="cache-add-select" style="flex:1;"></select>
+        <button id="btn-cache-add" class="btn btn-sm" style="background:rgba(48,209,88,0.15);border:1.5px solid rgba(48,209,88,0.45);color:#30d158;font-weight:600;white-space:nowrap;"
+          onclick="submitAddCache()">+ Add as Cache</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCacheConfigModal()">Close</button>
     </div>
   </div>
 </div>
@@ -1047,6 +1125,67 @@
       <button class="btn" id="btn-power-confirm"
         style="background:var(--accent-danger);color:#fff;"
         onclick="submitPowerAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reboot: Waiting / Reconnecting Modal (non-dismissable) -->
+<div class="modal-backdrop hidden" id="modal-reboot-wait">
+  <div class="modal" style="max-width:400px;text-align:center;">
+    <div class="modal-body" style="padding:40px 32px;">
+      <div id="reboot-wait-icon" style="font-size:48px;margin-bottom:20px;">↺</div>
+      <h3 id="reboot-wait-title" style="margin-bottom:10px;font-size:18px;">Rebooting…</h3>
+      <p id="reboot-wait-body" style="font-size:14px;color:var(--text-2);margin-bottom:24px;line-height:1.6;">
+        The server is restarting. This page will automatically reconnect once it's back online.
+      </p>
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text-3);font-size:13px;">
+        <span class="spinner"></span>
+        <span id="reboot-wait-status">Waiting for server…</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shutdown: Initiated Modal -->
+<div class="modal-backdrop hidden" id="modal-shutdown-done">
+  <div class="modal" style="max-width:400px;border:1px solid var(--accent-danger);text-align:center;">
+    <div class="modal-header" style="background:rgba(255,59,48,0.08);border-bottom:1px solid var(--accent-danger);">
+      <h3 style="color:var(--accent-danger);">⏻ Shutdown Initiated</h3>
+      <button class="modal-close" onclick="document.getElementById('modal-shutdown-done').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:28px 32px;">
+      <div style="font-size:48px;margin-bottom:16px;">⏻</div>
+      <p style="font-size:14px;color:var(--text-1);line-height:1.6;">
+        The server is shutting down. The portal will become unavailable shortly.<br><br>
+        You will need physical access or a remote power switch to turn it back on.
+      </p>
+    </div>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-shutdown-done').classList.add('hidden')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cache Remove Confirm Modal -->
+<div class="modal-backdrop hidden" id="modal-cache-remove-confirm">
+  <div class="modal" style="max-width:440px;border:1px solid var(--accent-danger);">
+    <div class="modal-header" style="background:rgba(255,59,48,0.08);border-bottom:1px solid var(--accent-danger);">
+      <h3 style="color:var(--accent-danger);">Remove Cache Device</h3>
+      <button class="modal-close" onclick="closeCacheRemoveConfirm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--text-1);margin-bottom:10px;">
+        Remove <span id="cache-remove-device" style="font-family:monospace;font-weight:700;color:var(--text-1);"></span> from the L2ARC cache?
+      </p>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;">
+        All cached data on this device will be evicted immediately. No data loss will occur, but read latency may temporarily increase until the cache warms up on another device.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCacheRemoveConfirm()">Cancel</button>
+      <button class="btn" id="btn-cache-remove-confirm"
+        style="background:var(--accent-danger);color:#fff;"
+        onclick="confirmCacheRemove()">Remove</button>
     </div>
   </div>
 </div>
@@ -1236,7 +1375,7 @@
 
 <!-- Create Dataset Modal -->
 <div class="modal-backdrop hidden" id="modal-create-dataset">
-  <div class="modal">
+  <div class="modal" style="max-width:540px;">
     <div class="modal-header"><h3>Create Dataset</h3><button class="modal-close" onclick="closeCreateDataset()">✕</button></div>
     <div id="cds-alert" class="alert alert-error hidden"></div>
     <form onsubmit="submitCreateDataset(event)">
@@ -1257,8 +1396,69 @@
         </div>
       </div>
       <div class="form-group">
-        <label>Compression <i class="info-tip tip-down" data-tip="LZ4: fast, low-CPU, good ratio — recommended for general use.&#10;ZSTD: higher compression ratio at the cost of more CPU — ideal for cold data or backups.&#10;Off: disable compression.&#10;Inherit: use the pool-level setting."></i></label>
-        <select id="cds-compression"><option value="inherit">Inherit from pool</option><option value="lz4">LZ4</option><option value="zstd">ZSTD</option><option value="off">Off</option></select>
+        <label>Capacity Reservation (0 = none) <i class="info-tip tip-down" data-tip="Reserves guaranteed space on the pool exclusively for this dataset's own data. Other datasets cannot use this reserved space even when the dataset is not using it.&#10;&#10;Use sparingly — reserved space is permanently deducted from pool free space. Useful for databases or critical datasets that must always have room to grow."></i></label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="cds-refreserv-amount" min="0" value="0" style="flex:1;">
+          <select id="cds-refreserv-unit" style="width:80px;"><option>MB</option><option selected>GB</option><option>TB</option></select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Compression <i class="info-tip tip-down" data-tip="LZ4: fast, low-CPU, good ratio — recommended for general use.&#10;ZSTD: higher compression ratio at the cost of more CPU — ideal for cold data or backups.&#10;Off: disable compression.&#10;Inherit: use the pool-level setting."></i></label>
+          <select id="cds-compression"><option value="inherit">Inherit from pool</option><option value="lz4">LZ4</option><option value="zstd">ZSTD</option><option value="off">Off</option></select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Record Size <i class="info-tip tip-down" data-tip="The block size ZFS uses for this dataset. Smaller values (4K–16K) suit databases and random-access workloads. Larger values (128K–1M) suit media files and sequential workloads. A mismatch causes read/write amplification. Only affects new data — existing blocks are not re-chunked.&#10;&#10;Inherit: uses the pool default (usually 128K)."></i></label>
+          <select id="cds-recordsize">
+            <option value="inherit">Inherit (pool default)</option>
+            <option value="512">512 B</option>
+            <option value="1K">1 KiB</option>
+            <option value="2K">2 KiB</option>
+            <option value="4K">4 KiB</option>
+            <option value="8K">8 KiB</option>
+            <option value="16K">16 KiB</option>
+            <option value="32K">32 KiB</option>
+            <option value="64K">64 KiB</option>
+            <option value="128K">128 KiB</option>
+            <option value="256K">256 KiB</option>
+            <option value="512K">512 KiB</option>
+            <option value="1M">1 MiB</option>
+            <option value="2M">2 MiB</option>
+            <option value="4M">4 MiB</option>
+            <option value="8M">8 MiB</option>
+            <option value="16M">16 MiB</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Sync Mode <i class="info-tip tip-down" data-tip="Controls when writes are committed to stable storage.&#10;&#10;Standard: writes go to the ZFS Intent Log first; flushed on fsync() calls — good balance of safety and speed.&#10;Always: every write waits for disk commit — safest, but slowest. Use for databases that require strict durability.&#10;Disabled: no sync semantics — fastest, but risks data loss on sudden power failure. Never use for critical data without a UPS.&#10;Inherit: uses the parent dataset or pool setting."></i></label>
+          <select id="cds-sync">
+            <option value="inherit">Inherit</option>
+            <option value="standard">Standard</option>
+            <option value="always">Always</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Deduplication <i class="info-tip tip-down" data-tip="Deduplication detects identical blocks and stores them only once, saving space when data is highly repetitive (e.g. VMs sharing the same OS image).&#10;&#10;Warning: ZFS must keep the entire deduplication table (DDT) in RAM (~320 bytes per unique block). With insufficient RAM, performance degrades severely. Only enable if you have ample RAM and genuinely duplicated data.&#10;&#10;Verify: checksums each dedup hit to guard against hash collisions. Safer but slower."></i></label>
+          <select id="cds-dedup">
+            <option value="inherit">Inherit</option>
+            <option value="off">Off</option>
+            <option value="on">On</option>
+            <option value="verify">Verify</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Case Sensitivity <i class="info-tip tip-down" data-tip="⚠ Cannot be changed after the dataset is created.&#10;&#10;Determines how filename lookups handle uppercase/lowercase.&#10;&#10;Sensitive (default on Linux): 'File.txt' and 'file.txt' are different files.&#10;Insensitive: 'File.txt' and 'file.txt' refer to the same file — required for Windows SMB clients that expect case-insensitive behaviour.&#10;Mixed: case-insensitive lookups but case-preserving storage."></i></label>
+          <select id="cds-casesensitivity">
+            <option value="sensitive">Sensitive (Linux default)</option>
+            <option value="insensitive">Insensitive (Windows/SMB)</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Comment</label>
+        <textarea id="cds-comment" rows="2" placeholder="Optional description for this dataset" style="resize:vertical;"></textarea>
       </div>
       <div class="flex gap-2" style="margin-top:8px;">
         <button type="button" class="btn btn-ghost" onclick="closeCreateDataset()">Cancel</button>
@@ -1270,7 +1470,7 @@
 
 <!-- Edit Dataset Modal -->
 <div class="modal-backdrop hidden" id="modal-edit-dataset">
-  <div class="modal">
+  <div class="modal" style="max-width:540px;">
     <div class="modal-header">
       <div><h3>Edit Dataset</h3><div class="text-3 text-sm" id="eds-name" style="font-family:monospace;"></div></div>
       <button class="modal-close" onclick="closeEditDataset()">✕</button>
@@ -1286,8 +1486,61 @@
         </div>
       </div>
       <div class="form-group">
-        <label>Compression <i class="info-tip tip-down" data-tip="LZ4: fast, low-CPU, good ratio — recommended for general use.&#10;ZSTD: higher compression ratio at the cost of more CPU — ideal for cold data or backups.&#10;Off: disable compression.&#10;Inherit: use the pool-level setting."></i></label>
-        <select id="eds-compression"><option value="inherit">Inherit</option><option value="lz4">LZ4</option><option value="zstd">ZSTD</option><option value="off">Off</option></select>
+        <label>Capacity Reservation (0 = none) <i class="info-tip tip-down" data-tip="Reserves guaranteed space on the pool exclusively for this dataset's own data. Other datasets cannot use this reserved space even when the dataset is not using it.&#10;&#10;Use sparingly — reserved space is permanently deducted from pool free space."></i></label>
+        <div style="display:flex;gap:8px;">
+          <input type="number" id="eds-refreserv-amount" min="0" value="0" style="flex:1;">
+          <select id="eds-refreserv-unit" style="width:80px;"><option>MB</option><option selected>GB</option><option>TB</option></select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Compression <i class="info-tip tip-down" data-tip="LZ4: fast, low-CPU, good ratio — recommended for general use.&#10;ZSTD: higher compression ratio at the cost of more CPU — ideal for cold data or backups.&#10;Off: disable compression.&#10;Inherit: use the pool-level setting."></i></label>
+          <select id="eds-compression"><option value="inherit">Inherit</option><option value="lz4">LZ4</option><option value="zstd">ZSTD</option><option value="off">Off</option></select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Record Size <i class="info-tip tip-down" data-tip="The block size ZFS uses for this dataset. Smaller values (4K–16K) suit databases and random-access workloads. Larger values (128K–1M) suit media files and sequential workloads. Only affects new data — existing blocks are not re-chunked."></i></label>
+          <select id="eds-recordsize">
+            <option value="inherit">Inherit (pool default)</option>
+            <option value="512">512 B</option>
+            <option value="1K">1 KiB</option>
+            <option value="2K">2 KiB</option>
+            <option value="4K">4 KiB</option>
+            <option value="8K">8 KiB</option>
+            <option value="16K">16 KiB</option>
+            <option value="32K">32 KiB</option>
+            <option value="64K">64 KiB</option>
+            <option value="128K">128 KiB</option>
+            <option value="256K">256 KiB</option>
+            <option value="512K">512 KiB</option>
+            <option value="1M">1 MiB</option>
+            <option value="2M">2 MiB</option>
+            <option value="4M">4 MiB</option>
+            <option value="8M">8 MiB</option>
+            <option value="16M">16 MiB</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Sync Mode <i class="info-tip tip-down" data-tip="Controls when writes are committed to stable storage.&#10;&#10;Standard: writes go to the ZFS Intent Log first; flushed on fsync() calls — good balance of safety and speed.&#10;Always: every write waits for disk commit — safest, but slowest.&#10;Disabled: no sync semantics — fastest, but risks data loss on sudden power failure.&#10;Inherit: uses the parent dataset or pool setting."></i></label>
+          <select id="eds-sync">
+            <option value="inherit">Inherit</option>
+            <option value="standard">Standard</option>
+            <option value="always">Always</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>Deduplication <i class="info-tip tip-down" data-tip="Deduplication detects identical blocks and stores them only once. Warning: requires ~320 bytes of RAM per unique block (DDT table). Only enable with ample RAM and genuinely duplicated data. Verify adds checksum validation on dedup hits."></i></label>
+          <select id="eds-dedup">
+            <option value="inherit">Inherit</option>
+            <option value="off">Off</option>
+            <option value="on">On</option>
+            <option value="verify">Verify</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>Comment</label>
+        <textarea id="eds-comment" rows="2" placeholder="Optional description for this dataset" style="resize:vertical;"></textarea>
       </div>
       <div class="flex gap-2" style="margin-top:8px;">
         <button type="button" class="btn btn-ghost" onclick="closeEditDataset()">Cancel</button>
@@ -1389,11 +1642,12 @@
 
 <!-- Create / Edit Share Modal -->
 <div class="modal-backdrop hidden" id="modal-share">
-  <div class="modal" style="max-width:520px;">
-    <div class="modal-header">
+  <div class="modal" style="max-width:520px;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-header" style="flex-shrink:0;">
       <h3 id="share-modal-title">New Share</h3>
       <button class="modal-close" onclick="closeShareModal()">✕</button>
     </div>
+    <div style="overflow-y:auto;overflow-x:hidden;flex:1;min-height:0;">
     <div id="share-alert" class="alert alert-error hidden"></div>
     <form onsubmit="submitShare(event)">
       <div class="form-group">
@@ -1487,11 +1741,12 @@
         <input type="text" id="share-hosts-deny" placeholder="10.0.1.0/24" autocomplete="off">
       </div>
 
-      <div class="flex gap-2" style="margin-top:8px;">
+      <div class="flex gap-2" style="margin-top:8px;padding-bottom:4px;">
         <button type="button" class="btn btn-ghost" onclick="closeShareModal()">Cancel</button>
         <button type="submit" class="btn btn-primary" style="flex:1;" id="share-submit-btn">Create Share</button>
       </div>
     </form>
+    </div><!-- end scrollable body -->
   </div>
 </div>
 
@@ -1936,10 +2191,15 @@ let _dashCharts      = {};
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  // Reset topbar icon buttons
+  const actBtn = document.getElementById('nav-activity');
+  if (actBtn) { actBtn.style.color = ''; actBtn.style.opacity = '0.7'; }
   const page = document.getElementById('page-' + name) || document.getElementById('page-dashboard');
   page.classList.remove('hidden');
   const nav = document.getElementById('nav-' + name);
-  if (nav) nav.classList.add('active');
+  if (nav && nav.classList.contains('nav-item')) nav.classList.add('active');
+  // Highlight topbar activity button when on activity page
+  if (name === 'activity' && actBtn) { actBtn.style.color = 'var(--accent-2)'; actBtn.style.opacity = '1'; }
   if (name === 'users')     { loadUsers(); if (currentUser.role === 'admin') { document.getElementById('api-keys-card').style.display = ''; loadAPIKeys(); } }
   if (name === 'activity')  loadAudit();
   if (name === 'prereqs')   loadPrereqs();
@@ -1976,7 +2236,7 @@ function openAbout() {
     const cached = _loadVerCache();
     if (cached && cached.data && cached.data.latest) {
       latEl.textContent = 'v' + cached.data.latest;
-      latEl.style.color = cached.data.update_available ? '#ffd60a' : '';
+      latEl.style.color = cached.data.update_available ? 'var(--accent-warn)' : '';
     } else {
       latEl.textContent = '…';
     }
@@ -2606,28 +2866,71 @@ function copyAPIKey() {
 }
 
 // ===== Full Audit Log Page =====
+let _auditEntries = [];
+let _auditPage    = 0;
+
+function _auditPerPage() {
+  // Each row is ~48px tall. Reserve ~220px for topbar + page header + card padding + pagination.
+  return Math.max(10, Math.floor((window.innerHeight - 220) / 48));
+}
+
+function _renderAuditPage() {
+  const el     = document.getElementById('activity-list');
+  const pagEl  = document.getElementById('audit-pagination');
+  const perPage = _auditPerPage();
+  const total   = _auditEntries.length;
+  const pages   = Math.ceil(total / perPage);
+  _auditPage    = Math.min(_auditPage, Math.max(0, pages - 1));
+  const slice   = _auditEntries.slice(_auditPage * perPage, (_auditPage + 1) * perPage);
+
+  el.innerHTML = slice.map(e => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--text-3);white-space:nowrap;min-width:140px;font-size:12px;">${formatDate(e.timestamp)}</span>
+      <span>${e.result==='ok'?'✅':'❌'}</span>
+      <div>
+        <span style="font-weight:600;">${esc(e.user)}</span>
+        <span class="text-2"> ${esc(e.action.replace(/_/g,' '))}</span>
+        ${e.target?`<span class="text-3"> → ${esc(e.target)}</span>`:''}
+        ${e.details?`<div class="text-3 text-sm mt-1">${esc(e.details)}</div>`:''}
+      </div>
+    </div>
+  `).join('') || '<div style="color:var(--text-3);padding:16px;">No entries on this page.</div>';
+
+  if (pages <= 1) {
+    pagEl.style.display = 'none';
+    return;
+  }
+  pagEl.style.display = 'flex';
+  const btnStyle = (disabled) =>
+    `style="padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text-2);cursor:${disabled?'default':'pointer'};opacity:${disabled?'0.4':'1'};"`;
+  pagEl.innerHTML = `
+    <button ${btnStyle(_auditPage===0)} onclick="_auditGo(0)" ${_auditPage===0?'disabled':''}>«</button>
+    <button ${btnStyle(_auditPage===0)} onclick="_auditGo(_auditPage-1)" ${_auditPage===0?'disabled':''}>‹ Newer</button>
+    <span style="font-size:13px;color:var(--text-2);">Page ${_auditPage+1} of ${pages}</span>
+    <button ${btnStyle(_auditPage>=pages-1)} onclick="_auditGo(_auditPage+1)" ${_auditPage>=pages-1?'disabled':''}>Older ›</button>
+    <button ${btnStyle(_auditPage>=pages-1)} onclick="_auditGo(${pages-1})" ${_auditPage>=pages-1?'disabled':''}>»</button>
+  `;
+}
+
+function _auditGo(page) {
+  _auditPage = page;
+  _renderAuditPage();
+}
+
 async function loadAudit() {
   const el = document.getElementById('activity-list');
+  document.getElementById('audit-pagination').style.display = 'none';
   el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:24px;">Loading…</div>';
   try {
     const resp    = await fetch('/api/audit');
     const entries = await resp.json();
-    if (!entries||!entries.length) {
+    if (!entries || !entries.length) {
       el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>No activity recorded yet.</p></div>';
       return;
     }
-    el.innerHTML = [...entries].reverse().slice(0,500).map(e => `
-      <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">
-        <span style="color:var(--text-3);white-space:nowrap;min-width:140px;font-size:12px;">${formatDate(e.timestamp)}</span>
-        <span>${e.result==='ok'?'✅':'❌'}</span>
-        <div>
-          <span style="font-weight:600;">${esc(e.user)}</span>
-          <span class="text-2"> ${esc(e.action.replace(/_/g,' '))}</span>
-          ${e.target?`<span class="text-3"> → ${esc(e.target)}</span>`:''}
-          ${e.details?`<div class="text-3 text-sm mt-1">${esc(e.details)}</div>`:''}
-        </div>
-      </div>
-    `).join('');
+    _auditEntries = [...entries].reverse();
+    _auditPage    = 0;
+    _renderAuditPage();
   } catch {
     el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load activity log.</div>';
   }
@@ -3073,18 +3376,43 @@ function renderPoolExists(el, pool) {
   // Inject header action buttons.
   document.getElementById('pool-header-actions').innerHTML = currentUser.role === 'admin' ? `
     <span id="pool-upgrade-btn-wrap"></span>
+    <button class="btn btn-ghost btn-sm" onclick="openCacheConfigModal()">⚡ Cache Config</button>
     <button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>
     <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);border-color:var(--accent-danger);"
       onclick="openDestroyPoolModal()">Destroy Pool</button>
   ` : `<button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>`;
 
-  // Member disks section.
-  const membersHtml = (pool.members && pool.members.length)
-    ? pool.members.map(m => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-          <span style="font-size:18px;">💿</span>
-          <span style="font-family:monospace;font-size:13px;font-weight:600;">${esc(m)}</span>
-        </div>`).join('')
+  // Member disks section (data members + cache devices).
+  const _diskEntry = (rawPath, devPath, roleLabel, roleColor) => {
+    const uuid = rawPath.includes('/by-partuuid/') ? rawPath.split('/').pop() : null;
+    const showUuid = uuid && uuid !== devPath;
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+        <span style="font-size:18px;">💿</span>
+        <div style="min-width:0;">
+          <div style="font-family:monospace;font-size:13px;font-weight:600;">${esc(devPath)}</div>
+          ${showUuid ? `<div style="font-family:monospace;font-size:10px;color:var(--text-3);margin-top:2px;">${esc(uuid)}</div>` : ''}
+        </div>
+      </div>
+      <span style="font-size:11px;font-weight:600;white-space:nowrap;color:${roleColor};">${roleLabel}</span>
+    </div>`;
+  };
+
+  const memberRows = (pool.members || []).map((m, i) => {
+    const dev  = (pool.member_devices && pool.member_devices[i]) || m;
+    const role = (pool.member_roles  && pool.member_roles[i])   || 'data';
+    const roleLabel = {stripe:'Stripe', mirror:'Mirror', raidz1:'RAIDZ-1', raidz2:'RAIDZ-2'}[role] || role.toUpperCase();
+    return _diskEntry(m, dev, roleLabel, 'var(--accent-2)');
+  });
+  const cacheRows = (pool.cache_devs || []).map((m, i) => {
+    const dev = (pool.cache_devices && pool.cache_devices[i]) || m;
+    return _diskEntry(m, dev, 'L2ARC Cache', '#bf5af2');
+  });
+
+  const allRows = [...memberRows, ...cacheRows];
+  const membersHtml = allRows.length
+    ? allRows.join('')
     : '<div class="text-3 text-sm" style="padding:10px 0;">No device info available (run SMART refresh)</div>';
 
   const addDiskBtn = currentUser.role === 'admin'
@@ -3130,9 +3458,15 @@ function renderPoolExists(el, pool) {
         <div class="stat-row"><span class="stat-label">Used</span><span class="stat-value">${fmtBytes(usableUsed)}</span></div>
         <div class="stat-row"><span class="stat-label">Available</span><span class="stat-value">${fmtBytes(usableAvail)}</span></div>
         <div class="stat-row"><span class="stat-label">Raw pool size</span><span class="stat-value text-3" style="font-size:12px;">${fmtBytes(pool.size)}</span></div>
+        <div class="stat-row"><span class="stat-label">Compression</span><span class="stat-value">${esc(pool.compression||'—')}</span></div>
+        <div class="stat-row"><span class="stat-label">Dedup</span><span class="stat-value">${esc(pool.dedup||'—')}</span></div>
+        <div class="stat-row"><span class="stat-label">Sync</span><span class="stat-value">${esc(pool.sync||'—')}</span></div>
+        <div class="stat-row"><span class="stat-label">Access time</span><span class="stat-value">${esc(pool.atime||'—')}</span></div>
+        ${currentUser.role==='admin' ? `
+        <button class="btn btn-ghost btn-sm" style="margin-top:16px;width:100%;" onclick="openPoolSettingsModal()">⚙ Edit Pool Settings</button>` : ''}
       </div>
       <div class="card" style="min-width:0;">
-        <h3 style="margin-bottom:4px;">Physical Disks (${(pool.members||[]).length})</h3>
+        <h3 style="margin-bottom:4px;">Physical Disks (${(pool.members||[]).length + (pool.cache_devs||[]).length})</h3>
         <div class="text-3 text-xs" style="margin-bottom:12px;">Devices that make up this pool</div>
         ${membersHtml}
         ${addDiskBtn}
@@ -3161,7 +3495,7 @@ function renderPoolCreate(el) {
   document.getElementById('pool-header-actions').innerHTML =
     `<button class="btn btn-ghost btn-sm" onclick="detectPools()">⬇ Import ZFS Pool</button>`;
   el.innerHTML = `
-    <div class="card" style="max-width:600px;">
+    <div class="card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
         <h3 style="margin:0;">Create ZFS Pool</h3>
         <button type="button" onclick="openPoolLayoutGuide()"
@@ -3172,47 +3506,65 @@ function renderPoolCreate(el) {
 
       <div id="create-pool-alert" class="alert alert-error hidden"></div>
 
-      <div class="form-group">
-        <label>Pool Name</label>
-        <input type="text" id="cp-name" value="tank" placeholder="tank">
-      </div>
-
-      <div class="form-group">
-        <label>Layout</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="cp-layout-btns">
-          ${[['stripe','Stripe'],['mirror','RAIDZ'],['raidz1','RAIDZ-1'],['raidz2','RAIDZ-2']].map(([l,label],i) => `
-            <button type="button" onclick="selectLayout('${l}')" id="cp-layout-${l}"
-              class="btn ${i===0?'btn-primary':'btn-ghost'}"
-              style="flex:1;min-width:100px;">
-              ${label}
-            </button>`).join('')}
+      <!-- Row 1: Pool Name + Layout -->
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;align-items:start;margin-bottom:18px;">
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:6px;">Pool Name</label>
+          <input type="text" id="cp-name" value="tank" placeholder="tank">
         </div>
-        <div id="cp-layout-hint" class="text-3 text-sm" style="margin-top:6px;">No redundancy — any disk failure loses data. Min 1 disk.</div>
-      </div>
-
-      <div class="form-group">
-        <label>Block Size (ashift) <i class="info-tip tip-down" data-tip="ZFS block size as a power of 2. Must match or exceed the physical sector size of your drives.&#10;&#10;512 B (ashift=9): legacy HDDs only.&#10;4 KB (ashift=12): recommended for modern HDDs and most SSDs.&#10;8 KB (ashift=13): NVMe SSDs with 8 KB sectors.&#10;&#10;Setting too low causes write amplification — this cannot be changed after pool creation."></i></label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${[[9,'512 B','Legacy HDDs'],[12,'4 KB','Recommended'],[13,'8 KB','NVMe SSDs']].map(([v,l,hint],i) => `
-            <button type="button" onclick="selectAshift(${v})" id="cp-ashift-${v}"
-              class="btn ${i===1?'btn-primary':'btn-ghost'}" style="flex:1;min-width:90px;flex-direction:column;height:auto;padding:10px 8px;">
-              <span style="font-weight:700;">${l}</span>
-              <span style="font-size:10px;font-weight:400;opacity:.7;">${hint}</span>
-            </button>`).join('')}
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:6px;">Layout</label>
+          <div style="display:flex;gap:8px;" id="cp-layout-btns">
+            ${[['stripe','Stripe'],['mirror','Mirror'],['raidz1','RAIDZ-1'],['raidz2','RAIDZ-2']].map(([l,label],i) => `
+              <button type="button" onclick="selectLayout('${l}')" id="cp-layout-${l}"
+                class="btn ${i===0?'btn-primary':'btn-ghost'}"
+                style="flex:1;">
+                ${label}
+              </button>`).join('')}
+          </div>
+          <div id="cp-layout-hint" class="text-3 text-sm" style="margin-top:6px;">No redundancy — any disk failure loses data. Min 1 disk.</div>
         </div>
       </div>
 
-      <div class="form-group">
-        <label>Compression</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${[['off','Off'],['lz4','LZ4 (recommended)'],['zstd','ZSTD (max ratio)']].map(([v,l],i) => `
-            <button type="button" onclick="selectCompression('${v}')" id="cp-comp-${v}"
-              class="btn ${i===1?'btn-primary':'btn-ghost'}" style="flex:1;min-width:90px;">
+      <!-- Row 2: Ashift + Compression -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:18px;">
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:6px;">Block Size (ashift) <i class="info-tip tip-down" data-tip="ZFS block size as a power of 2. Must match or exceed the physical sector size of your drives.&#10;&#10;512 B (ashift=9): legacy HDDs only.&#10;4 KB (ashift=12): recommended for modern HDDs and most SSDs.&#10;8 KB (ashift=13): NVMe SSDs with 8 KB sectors.&#10;&#10;Setting too low causes write amplification — this cannot be changed after pool creation."></i></label>
+          <div style="display:flex;gap:8px;">
+            ${[[9,'512 B','Legacy HDDs'],[12,'4 KB','Recommended'],[13,'8 KB','NVMe SSDs']].map(([v,l,hint],i) => `
+              <button type="button" onclick="selectAshift(${v})" id="cp-ashift-${v}"
+                class="btn ${i===1?'btn-primary':'btn-ghost'}" style="flex:1;flex-direction:column;height:auto;padding:10px 8px;">
+                <span style="font-weight:700;">${l}</span>
+                <span style="font-size:10px;font-weight:400;opacity:.7;">${hint}</span>
+              </button>`).join('')}
+          </div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:6px;">Compression</label>
+          <div style="display:flex;gap:8px;">
+            ${[['off','Off'],['lz4','LZ4 (recommended)'],['zstd','ZSTD (max ratio)']].map(([v,l],i) => `
+              <button type="button" onclick="selectCompression('${v}')" id="cp-comp-${v}"
+                class="btn ${i===1?'btn-primary':'btn-ghost'}" style="flex:1;">
+                ${l}
+              </button>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Dedup -->
+      <div style="margin-bottom:18px;">
+        <label style="font-size:13px;font-weight:500;color:var(--text-2);display:block;margin-bottom:6px;">Deduplication <i class="info-tip tip-down" data-tip="Deduplication eliminates duplicate data blocks to save space. It requires significant RAM (typically 5 GB per TB of pool data) and can reduce performance. Recommended only for highly repetitive data (e.g. VMs with identical base images). Keep OFF for general NAS use."></i></label>
+        <div style="display:flex;gap:8px;max-width:400px;">
+          ${[['off','Off (recommended)'],['on','On'],['verify','Verify']].map(([v,l],i) => `
+            <button type="button" onclick="selectDedup('${v}')" id="cp-dedup-${v}"
+              class="btn ${i===0?'btn-primary':'btn-ghost'}" style="flex:1;">
               ${l}
             </button>`).join('')}
         </div>
+        <div id="cp-dedup-hint" class="text-3 text-sm" style="margin-top:6px;">Deduplication disabled. Recommended for most workloads.</div>
       </div>
 
+      <!-- Row 3: Disk selection -->
       <div class="form-group">
         <label>Select Disks <span id="cp-disk-hint" class="text-3" style="font-size:12px;">(loading…)</span></label>
         <div id="cp-disks" style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
@@ -3229,6 +3581,7 @@ function renderPoolCreate(el) {
   window._cpLayout = 'stripe';
   window._cpAshift = 12;
   window._cpCompression = 'lz4';
+  window._cpDedup = 'off';
 
   loadPoolDisks();
 }
@@ -3262,8 +3615,21 @@ function selectAshift(v) {
 function selectCompression(v) {
   window._cpCompression = v;
   ['off','lz4','zstd'].forEach(x => {
-    document.getElementById('cp-comp-'+x).className = 'btn ' + (x===v?'btn-primary':'btn-ghost') + ' flex:1;min-width:90px;';
+    document.getElementById('cp-comp-'+x).className = 'btn ' + (x===v?'btn-primary':'btn-ghost');
   });
+}
+
+const dedupHints = {
+  off:    'Deduplication disabled. Recommended for most workloads.',
+  on:     'Deduplication enabled. Requires ~5 GB RAM per TB of pool data.',
+  verify: 'Deduplication with block-level verification. Most accurate but highest overhead.',
+};
+function selectDedup(v) {
+  window._cpDedup = v;
+  ['off','on','verify'].forEach(x => {
+    document.getElementById('cp-dedup-'+x).className = 'btn ' + (x===v?'btn-primary':'btn-ghost');
+  });
+  document.getElementById('cp-dedup-hint').textContent = dedupHints[v] || '';
 }
 
 async function loadPoolDisks() {
@@ -3284,14 +3650,15 @@ async function loadPoolDisks() {
     return;
   }
   hint.textContent = `(${available.length} available)`;
-  el.innerHTML = available.map(d => `
-    <label style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);">
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));">` +
+    available.map((d, i, arr) => `
+    <label style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);border-right:1px solid var(--border);">
       <input type="checkbox" value="${esc(d.device)}" class="cp-disk-cb" style="width:16px;height:16px;accent-color:var(--accent-2);">
-      <div>
-        <div style="font-weight:600;">${esc(d.device)}</div>
+      <div style="min-width:0;">
+        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(d.device)}${d.serial ? ` <span style="font-weight:400;color:var(--text-3);font-size:12px;">(${esc(d.serial)})</span>` : ''}</div>
         <div class="text-3 text-sm">${esc(d.vendor||'')} ${esc(d.model||'')} · ${esc(d.size)} · ${esc(d.disk_type)}</div>
       </div>
-    </label>`).join('');
+    </label>`).join('') + `</div>`;
 }
 
 function submitCreatePool() {
@@ -3340,7 +3707,7 @@ async function _doCreatePool() {
   const resp = await fetch('/api/pool', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ name, layout: window._cpLayout, ashift: window._cpAshift,
-      compression: window._cpCompression, devices }),
+      compression: window._cpCompression, dedup: window._cpDedup, devices }),
   });
   removeActiveJob('pool-create');
   const data = await resp.json();
@@ -3507,7 +3874,7 @@ async function openAddDisksModal() {
         <input type="checkbox" name="add-disk" value="${esc(d.device||('/dev/'+d.name))}"
           style="width:15px;height:15px;accent-color:var(--accent-2);" onchange="updateAddDisksMode()">
         <div style="flex:1;">
-          <div style="font-family:monospace;font-size:13px;font-weight:600;">${esc(d.device||('/dev/'+d.name))}</div>
+          <div style="font-family:monospace;font-size:13px;font-weight:600;">${esc(d.device||('/dev/'+d.name))}${d.serial ? ` <span style="font-weight:400;color:var(--text-3);font-size:12px;">(${esc(d.serial)})</span>` : ''}</div>
           <div style="font-size:12px;color:var(--text-3);">${esc(d.model||d.vendor||'Unknown')} — ${fmtBytes(d.size_bytes||0)}</div>
         </div>
       </label>`).join('');
@@ -3531,7 +3898,7 @@ function updateAddDisksMode() {
   // Build available options from most to least protective.
   const opts = [];
   if (canExpand) opts.push({
-    mode: 'expand', label: 'RAIDZ Expansion', badge: 'ZFS 2.3+', badgeColor: '#30d158',
+    mode: 'expand', label: 'RAIDZ Expansion', badge: 'ZFS 2.2+', badgeColor: '#30d158',
     desc: 'Attaches this disk directly to the existing RAIDZ vdev, expanding its capacity in-place. No new vdev is created.',
   });
   if (count >= 4) opts.push({
@@ -3623,6 +3990,226 @@ async function submitAddDisks() {
   closeAddDisksModal();
   await refreshPoolBar();
   loadPool();
+}
+
+// ===== Pool Settings =====
+function _psRadioGroup(containerId, options, current) {
+  document.getElementById(containerId).innerHTML = options.map(([v, label, hint]) => {
+    const sel = v === current;
+    return `<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;
+        border:1px solid ${sel ? 'var(--accent-2)' : 'var(--border)'};border-radius:var(--radius-sm);
+        cursor:pointer;background:${sel ? 'rgba(10,132,255,0.06)' : 'transparent'};">
+      <input type="radio" name="${containerId}" value="${v}" ${sel ? 'checked' : ''}
+        onchange="_psSelect('${containerId}','${v}')" style="margin-top:2px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${label}</div>
+        ${hint ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px;">${hint}</div>` : ''}
+      </div>
+    </label>`;
+  }).join('');
+}
+function _psSelect(containerId, v) {
+  document.getElementById(containerId).querySelectorAll('label').forEach(lbl => {
+    const inp = lbl.querySelector('input');
+    const sel = inp && inp.value === v;
+    lbl.style.borderColor = sel ? 'var(--accent-2)' : 'var(--border)';
+    lbl.style.background  = sel ? 'rgba(10,132,255,0.06)' : 'transparent';
+  });
+}
+function openPoolSettingsModal() {
+  const pool = poolData;
+  if (!pool) return;
+  document.getElementById('pool-settings-alert').classList.add('hidden');
+  _psRadioGroup('ps-compression-btns', [
+    ['lz4',      'LZ4',          'Fast, excellent ratio — recommended'],
+    ['zstd',     'ZSTD',         'Higher ratio, more CPU'],
+    ['zstd-fast','ZSTD-Fast',    'ZSTD optimised for speed'],
+    ['gzip',     'GZIP',         'Maximum ratio, high CPU'],
+    ['off',      'Off',          'No compression'],
+  ], pool.compression || 'lz4');
+  _psRadioGroup('ps-dedup-btns', [
+    ['off',    'Off',    'Recommended for most workloads'],
+    ['on',     'On',     'Requires ~5 GB RAM per TB of data'],
+    ['verify', 'Verify', 'On + block-level verification'],
+  ], pool.dedup || 'off');
+  _psRadioGroup('ps-sync-btns', [
+    ['standard', 'Standard', 'Respect application sync calls'],
+    ['always',   'Always',   'Force every write to disk — safest'],
+    ['disabled', 'Disabled', 'Ignore sync calls — fastest, risk of data loss'],
+  ], pool.sync || 'standard');
+  _psRadioGroup('ps-atime-btns', [
+    ['off', 'Off', 'Recommended — no overhead on reads'],
+    ['on',  'On',  'Update access time on every read'],
+  ], pool.atime || 'off');
+  document.getElementById('modal-pool-settings').classList.remove('hidden');
+}
+function closePoolSettingsModal() {
+  document.getElementById('modal-pool-settings').classList.add('hidden');
+}
+async function submitPoolSettings() {
+  const alertEl = document.getElementById('pool-settings-alert');
+  const btn     = document.getElementById('btn-pool-settings-save');
+  alertEl.classList.add('hidden');
+
+  const val = id => {
+    const el = document.querySelector(`#${id} input[type=radio]:checked`);
+    return el ? el.value : null;
+  };
+  const body = {
+    compression: val('ps-compression-btns'),
+    dedup:       val('ps-dedup-btns'),
+    sync:        val('ps-sync-btns'),
+    atime:       val('ps-atime-btns'),
+  };
+
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving…';
+  const resp = await fetch('/api/pool/settings', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  btn.disabled = false; btn.innerHTML = 'Save Settings';
+
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to save settings.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  poolData = data;
+  closePoolSettingsModal();
+  const el = document.getElementById('pool-content');
+  if (el) renderPoolExists(el, poolData);
+  refreshActivityBar();
+}
+
+// ===== Pool Cache Config =====
+let _cacheChanged = false;
+
+function openCacheConfigModal() {
+  _cacheChanged = false;
+  document.getElementById('cache-alert').classList.add('hidden');
+  _renderCacheModal();
+  document.getElementById('modal-cache-config').classList.remove('hidden');
+}
+function closeCacheConfigModal() {
+  document.getElementById('modal-cache-config').classList.add('hidden');
+  if (_cacheChanged && poolData) {
+    const el = document.getElementById('pool-content');
+    if (el) renderPoolExists(el, poolData);
+  }
+  _cacheChanged = false;
+}
+
+function _renderCacheModal() {
+  const cacheDevs = (poolData && poolData.cache_devs) ? poolData.cache_devs : [];
+  const listEl = document.getElementById('cache-current-list');
+  if (cacheDevs.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:8px 0;">No cache devices assigned.</div>';
+  } else {
+    listEl.innerHTML = cacheDevs.map(dev => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:6px;">
+        <span style="font-family:monospace;font-size:13px;font-weight:600;">⚡ ${esc(dev)}</span>
+        <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);"
+          onclick="submitRemoveCache('${esc(dev)}')">Remove</button>
+      </div>`).join('');
+  }
+
+  // Populate available disks dropdown (non-in-use, not already a cache dev).
+  const sel = document.getElementById('cache-add-select');
+  const cacheSet = new Set(cacheDevs);
+  sel.innerHTML = '<option value="">Loading available disks…</option>';
+  sel.disabled = true;
+  fetch('/api/disks').then(r => r.json()).then(disks => {
+    const available = (disks || []).filter(d => !d.in_use && !cacheSet.has(d.device));
+    sel.disabled = false;
+    if (available.length === 0) {
+      sel.innerHTML = '<option value="">No available disks</option>';
+    } else {
+      sel.innerHTML = available.map(d =>
+        `<option value="${esc(d.device)}">${esc(d.device)} — ${esc(d.vendor||'')} ${esc(d.model||'')} (${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)})</option>`
+      ).join('');
+    }
+  }).catch(() => {
+    sel.disabled = false;
+    sel.innerHTML = '<option value="">Failed to load disks</option>';
+  });
+}
+
+async function submitAddCache() {
+  const sel     = document.getElementById('cache-add-select');
+  const device  = sel.value;
+  const alertEl = document.getElementById('cache-alert');
+  const btn     = document.getElementById('btn-cache-add');
+  alertEl.classList.add('hidden');
+  if (!device) return;
+
+  // Disable controls and show progress immediately.
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Adding…';
+  sel.disabled = true;
+  // Optimistically remove the selected option so the list looks updated right away.
+  const opt = sel.querySelector(`option[value="${CSS.escape(device)}"]`);
+  if (opt) opt.remove();
+  if (sel.options.length === 0) sel.innerHTML = '<option value="">No available disks</option>';
+
+  const resp = await fetch('/api/pool/cache', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({device}),
+  });
+  const data = await resp.json();
+
+  btn.disabled = false;
+  btn.innerHTML = '+ Add as Cache';
+  sel.disabled = false;
+
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to add cache device.';
+    alertEl.classList.remove('hidden');
+    // Restore the option on failure.
+    _renderCacheModal();
+    return;
+  }
+  poolData = data;
+  _cacheChanged = true;
+  _renderCacheModal();
+  _silentRefreshDisks();
+}
+
+let _cacheRemoveDevice = null;
+
+function submitRemoveCache(device) {
+  _cacheRemoveDevice = device;
+  document.getElementById('cache-remove-device').textContent = device;
+  document.getElementById('btn-cache-remove-confirm').disabled = false;
+  document.getElementById('btn-cache-remove-confirm').textContent = 'Remove';
+  document.getElementById('modal-cache-remove-confirm').classList.remove('hidden');
+}
+function closeCacheRemoveConfirm() {
+  document.getElementById('modal-cache-remove-confirm').classList.add('hidden');
+  _cacheRemoveDevice = null;
+}
+async function confirmCacheRemove() {
+  if (!_cacheRemoveDevice) return;
+  const alertEl   = document.getElementById('cache-alert');
+  const btn       = document.getElementById('btn-cache-remove-confirm');
+  btn.disabled    = true;
+  btn.innerHTML   = '<span class="spinner"></span> Removing…';
+  alertEl.classList.add('hidden');
+  const resp = await fetch('/api/pool/cache', {
+    method: 'DELETE', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({device: _cacheRemoveDevice}),
+  });
+  const data = await resp.json();
+  closeCacheRemoveConfirm();
+  if (!resp.ok) {
+    alertEl.textContent = data.error || 'Failed to remove cache device.';
+    alertEl.classList.remove('hidden');
+    return;
+  }
+  poolData = data;
+  _cacheChanged = true;
+  _renderCacheModal();
+  _silentRefreshDisks();
 }
 
 // ===== Destroy Pool =====
@@ -3843,11 +4430,52 @@ async function submitPowerAction() {
     alertEl.classList.remove('hidden');
     return;
   }
-  // Server is going down — show a persistent message and close modal.
   closePowerModal();
-  alert(_powerAction === 'reboot'
-    ? 'Reboot initiated. The portal will be unavailable for a moment.'
-    : 'Shutdown initiated. The server is powering off.');
+  if (_powerAction === 'reboot') {
+    _startRebootWait();
+  } else {
+    document.getElementById('modal-shutdown-done').classList.remove('hidden');
+  }
+}
+
+function _startRebootWait() {
+  document.getElementById('reboot-wait-icon').textContent  = '↺';
+  document.getElementById('reboot-wait-title').textContent = 'Rebooting…';
+  document.getElementById('reboot-wait-body').textContent  =
+    'The server is restarting. This page will automatically reconnect once it\'s back online.';
+  document.getElementById('reboot-wait-status').textContent = 'Waiting for server…';
+  document.getElementById('modal-reboot-wait').classList.remove('hidden');
+
+  // Give the server a moment to begin shutting down before polling starts.
+  let attempts = 0;
+  const maxAttempts = 120; // 2 minutes at 1s intervals
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(poll);
+      document.getElementById('reboot-wait-status').textContent =
+        'Server is taking longer than expected. Try refreshing manually.';
+      return;
+    }
+    // First 6 seconds: just wait — server hasn't had time to go down yet.
+    if (attempts <= 6) return;
+    try {
+      const r = await fetch('/api/version', {cache: 'no-store'});
+      // Any HTTP response means the server is back up.
+      if (r.status > 0) {
+        clearInterval(poll);
+        document.getElementById('reboot-wait-icon').textContent  = '✓';
+        document.getElementById('reboot-wait-title').textContent = 'Back online!';
+        document.getElementById('reboot-wait-status').textContent = 'Redirecting to login…';
+        setTimeout(() => { window.location.href = '/login'; }, 800);
+      }
+    } catch {
+      // Network error = server still down, keep polling.
+      const remaining = maxAttempts - attempts;
+      document.getElementById('reboot-wait-status').textContent =
+        `Waiting for server… (${remaining}s)`;
+    }
+  }, 1000);
 }
 // Close power menu when clicking outside it.
 document.addEventListener('click', e => {
@@ -3891,7 +4519,7 @@ function renderDatasets(el) {
     return `
       <tr>
         <td>
-          <div style="display:flex;align-items:center;gap:8px;padding-left:${indent}px;">
+          <div style="display:flex;align-items:center;gap:8px;padding-left:${indent}px;cursor:pointer;" onclick="openDatasetDetail('${esc(d.name)}')">
             <span style="opacity:.5;font-size:13px;">${isRoot ? '🗄' : '📁'}</span>
             <div>
               <div style="font-weight:600;">${esc(d.short_name)}</div>
@@ -3902,11 +4530,12 @@ function renderDatasets(el) {
         <td style="font-family:monospace;font-size:13px;">${fmtBytes(d.used)}</td>
         <td style="font-family:monospace;font-size:13px;">${d.quota > 0 ? fmtBytes(d.quota) : 'none'}</td>
         <td style="font-size:13px;">${esc(d.compression)} <span class="text-3">${esc(d.compress_ratio)}</span></td>
+        <td style="font-size:12px;color:var(--text-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d.comment||'')}">${d.comment ? esc(d.comment) : '<span style="color:var(--text-3);">—</span>'}</td>
         <td>
           ${!isRoot && currentUser.role==='admin' ? `
             <div style="display:flex;gap:6px;">
               <button class="btn btn-ghost btn-sm" onclick="openCreateSnapshot('${esc(d.name)}')">📸</button>
-              <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}','${esc(d.quota_str)}','${esc(d.compression)}')">Edit</button>
+              <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}')">Edit</button>
               <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteDataset('${esc(d.name)}')">Delete</button>
             </div>` : ''}
         </td>
@@ -3916,7 +4545,7 @@ function renderDatasets(el) {
   el.innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Dataset</th><th>Used</th><th>Quota</th><th>Compression</th><th></th></tr></thead>
+        <thead><tr><th>Dataset</th><th>Used</th><th>Quota</th><th>Compression</th><th>Comment</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -3928,6 +4557,17 @@ function openCreateDataset() {
     (datasetCache || []).map(d => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
   document.getElementById('cds-alert').classList.add('hidden');
   document.getElementById('cds-name').value = '';
+  document.getElementById('cds-quota-amount').value = '0';
+  document.getElementById('cds-quota-unit').value = 'GB';
+  document.getElementById('cds-quota-type').value = 'quota';
+  document.getElementById('cds-refreserv-amount').value = '0';
+  document.getElementById('cds-refreserv-unit').value = 'GB';
+  document.getElementById('cds-compression').value = 'inherit';
+  document.getElementById('cds-recordsize').value = 'inherit';
+  document.getElementById('cds-sync').value = 'inherit';
+  document.getElementById('cds-dedup').value = 'inherit';
+  document.getElementById('cds-casesensitivity').value = 'sensitive';
+  document.getElementById('cds-comment').value = '';
 }
 function closeCreateDataset() { document.getElementById('modal-create-dataset').classList.add('hidden'); }
 
@@ -3936,43 +4576,53 @@ async function submitCreateDataset(e) {
   const alertEl = document.getElementById('cds-alert');
   alertEl.classList.add('hidden');
 
-  const parent = document.getElementById('cds-parent').value;
-  const name   = document.getElementById('cds-name').value.trim();
-  const amount = parseFloat(document.getElementById('cds-quota-amount').value) || 0;
-  const unit   = document.getElementById('cds-quota-unit').value;
-  const qtype  = document.getElementById('cds-quota-type').value;
-  const comp   = document.getElementById('cds-compression').value;
+  const parent        = document.getElementById('cds-parent').value;
+  const name          = document.getElementById('cds-name').value.trim();
+  const amount        = parseFloat(document.getElementById('cds-quota-amount').value) || 0;
+  const unit          = document.getElementById('cds-quota-unit').value;
+  const qtype         = document.getElementById('cds-quota-type').value;
+  const comp          = document.getElementById('cds-compression').value;
+  const rAmount       = parseFloat(document.getElementById('cds-refreserv-amount').value) || 0;
+  const rUnit         = document.getElementById('cds-refreserv-unit').value;
+  const recordsize    = document.getElementById('cds-recordsize').value;
+  const sync          = document.getElementById('cds-sync').value;
+  const dedup         = document.getElementById('cds-dedup').value;
+  const casesens      = document.getElementById('cds-casesensitivity').value;
+  const comment       = document.getElementById('cds-comment').value.trim();
 
   if (!name) { alertEl.textContent = 'Dataset name is required.'; alertEl.classList.remove('hidden'); return; }
 
-  const fullName   = parent + '/' + name;
-  const quotaBytes = amount > 0 ? Math.round(amount * {'MB':1024**2,'GB':1024**3,'TB':1024**4}[unit]) : 0;
+  const fullName        = parent + '/' + name;
+  const unitMap         = {'MB':1024**2,'GB':1024**3,'TB':1024**4};
+  const quotaBytes      = amount > 0 ? Math.round(amount * unitMap[unit]) : 0;
+  const refreservBytes  = rAmount > 0 ? Math.round(rAmount * unitMap[rUnit]) : 0;
 
   const btn = document.querySelector('#modal-create-dataset button[type=submit]');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Creating…';
 
-  closeCreateDataset();
-  addActiveJob('dataset-create-' + fullName, `Creating dataset ${fullName}…`);
-
   const resp = await fetch('/api/datasets', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name: fullName, quota: quotaBytes, quota_type: qtype, compression: comp}),
+    body: JSON.stringify({
+      name: fullName, quota: quotaBytes, quota_type: qtype,
+      refreservation: refreservBytes,
+      compression: comp, record_size: recordsize,
+      sync, dedup, case_sensitivity: casesens, comment,
+    }),
   });
   const data = await resp.json();
-  removeActiveJob('dataset-create-' + fullName);
   btn.disabled = false;
   btn.innerHTML = 'Create';
 
   if (!resp.ok) {
-    // Re-open modal and show error.
-    document.getElementById('modal-create-dataset').classList.remove('hidden');
     alertEl.textContent = data.error || 'Failed to create dataset.';
     alertEl.classList.remove('hidden');
     return;
   }
+  closeCreateDataset();
   await refreshPoolBar();
   loadDatasets();
+  refreshActivityBar();
 }
 
 async function deleteDataset(name) {
@@ -3989,12 +4639,43 @@ async function deleteDataset(name) {
   }
 }
 
-function openEditDataset(name, quotaStr, comp) {
+function openEditDataset(name) {
+  const d = (datasetCache || []).find(x => x.name === name);
+  if (!d) return;
   document.getElementById('modal-edit-dataset').classList.remove('hidden');
   document.getElementById('eds-name').textContent = name;
   document.getElementById('eds-name').dataset.name = name;
-  document.getElementById('eds-compression').value = comp;
   document.getElementById('eds-alert').classList.add('hidden');
+
+  // Quota: parse from bytes.
+  const unitMap = {'MB':1024**2,'GB':1024**3,'TB':1024**4};
+  const quota   = d.quota || 0;
+  let qAmt = 0, qUnit = 'GB';
+  if (quota > 0) {
+    if (quota % unitMap['TB'] === 0) { qAmt = quota / unitMap['TB']; qUnit = 'TB'; }
+    else if (quota % unitMap['GB'] === 0) { qAmt = quota / unitMap['GB']; qUnit = 'GB'; }
+    else { qAmt = quota / unitMap['MB']; qUnit = 'MB'; }
+  }
+  document.getElementById('eds-quota-amount').value = qAmt;
+  document.getElementById('eds-quota-unit').value   = qUnit;
+  document.getElementById('eds-quota-type').value   = d.refquota > 0 ? 'refquota' : 'quota';
+
+  // Refreservation.
+  const refreserv = d.refreservation || 0;
+  let rAmt = 0, rUnit = 'GB';
+  if (refreserv > 0) {
+    if (refreserv % unitMap['TB'] === 0) { rAmt = refreserv / unitMap['TB']; rUnit = 'TB'; }
+    else if (refreserv % unitMap['GB'] === 0) { rAmt = refreserv / unitMap['GB']; rUnit = 'GB'; }
+    else { rAmt = refreserv / unitMap['MB']; rUnit = 'MB'; }
+  }
+  document.getElementById('eds-refreserv-amount').value = rAmt;
+  document.getElementById('eds-refreserv-unit').value   = rUnit;
+
+  document.getElementById('eds-compression').value = d.compression || 'inherit';
+  document.getElementById('eds-recordsize').value   = d.record_size_raw || 'inherit';
+  document.getElementById('eds-sync').value         = d.sync || 'inherit';
+  document.getElementById('eds-dedup').value        = d.dedup || 'inherit';
+  document.getElementById('eds-comment').value      = d.comment || '';
 }
 function closeEditDataset() { document.getElementById('modal-edit-dataset').classList.add('hidden'); }
 
@@ -4002,12 +4683,20 @@ async function submitEditDataset(e) {
   e.preventDefault();
   const alertEl = document.getElementById('eds-alert');
   alertEl.classList.add('hidden');
-  const name    = document.getElementById('eds-name').dataset.name;
-  const amount  = parseFloat(document.getElementById('eds-quota-amount').value) || 0;
-  const unit    = document.getElementById('eds-quota-unit').value;
-  const qtype   = document.getElementById('eds-quota-type').value;
-  const comp    = document.getElementById('eds-compression').value;
-  const quotaBytes = amount > 0 ? Math.round(amount * {'MB':1024**2,'GB':1024**3,'TB':1024**4}[unit]) : 0;
+  const name      = document.getElementById('eds-name').dataset.name;
+  const amount    = parseFloat(document.getElementById('eds-quota-amount').value) || 0;
+  const unit      = document.getElementById('eds-quota-unit').value;
+  const qtype     = document.getElementById('eds-quota-type').value;
+  const comp      = document.getElementById('eds-compression').value;
+  const rAmount   = parseFloat(document.getElementById('eds-refreserv-amount').value) || 0;
+  const rUnit     = document.getElementById('eds-refreserv-unit').value;
+  const recordsize = document.getElementById('eds-recordsize').value;
+  const sync      = document.getElementById('eds-sync').value;
+  const dedup     = document.getElementById('eds-dedup').value;
+  const comment   = document.getElementById('eds-comment').value;
+  const unitMap   = {'MB':1024**2,'GB':1024**3,'TB':1024**4};
+  const quotaBytes      = amount > 0 ? Math.round(amount * unitMap[unit]) : 0;
+  const refreservBytes  = rAmount > 0 ? Math.round(rAmount * unitMap[rUnit]) : 0;
 
   const jobId = 'dataset-edit-' + name;
   closeEditDataset();
@@ -4015,7 +4704,12 @@ async function submitEditDataset(e) {
 
   const resp = await fetch('/api/datasets/' + encodeURIComponent(name), {
     method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({quota: quotaBytes, quota_type: qtype, compression: comp}),
+    body: JSON.stringify({
+      quota: quotaBytes, quota_type: qtype,
+      refreservation: refreservBytes,
+      compression: comp, record_size: recordsize,
+      sync, dedup, comment,
+    }),
   });
   const data = await resp.json();
   removeActiveJob(jobId);
@@ -4324,7 +5018,7 @@ async function deleteSnapshot(name) {
 }
 
 function openDatasetDetail(name) {
-  const d = (datasetData || []).find(x => x.name === name);
+  const d = (datasetData || []).find(x => x.name === name) || (datasetCache || []).find(x => x.name === name);
   if (!d) return;
 
   // Title: short name, full path below.
@@ -4345,10 +5039,21 @@ function openDatasetDetail(name) {
   document.getElementById('dsd-refer').textContent    = fmtBytes(d.refer);
   document.getElementById('dsd-quota').textContent    = d.quota > 0 ? fmtBytes(d.quota) : '—';
 
-  document.getElementById('dsd-comp').textContent    = d.compression || '—';
-  document.getElementById('dsd-ratio').textContent   = d.compress_ratio || '—';
-  document.getElementById('dsd-recsize').textContent = d.record_size ? fmtBytes(d.record_size) : '—';
-  document.getElementById('dsd-mount').textContent   = d.mountpoint || '—';
+  document.getElementById('dsd-comp').textContent       = d.compression || '—';
+  document.getElementById('dsd-ratio').textContent      = d.compress_ratio || '—';
+  document.getElementById('dsd-recsize').textContent    = d.record_size_raw || (d.record_size ? fmtBytes(d.record_size) : '—');
+  document.getElementById('dsd-refreserv').textContent  = d.refreservation > 0 ? fmtBytes(d.refreservation) : '—';
+  document.getElementById('dsd-sync').textContent       = d.sync || '—';
+  document.getElementById('dsd-dedup').textContent      = d.dedup || '—';
+  document.getElementById('dsd-case').textContent       = d.case_sensitivity || '—';
+  document.getElementById('dsd-mount').textContent      = d.mountpoint || '—';
+  const commentRow = document.getElementById('dsd-comment-row');
+  if (d.comment) {
+    document.getElementById('dsd-comment').textContent = d.comment;
+    commentRow.style.display = '';
+  } else {
+    commentRow.style.display = 'none';
+  }
 
   document.getElementById('modal-dataset-detail').classList.remove('hidden');
 }
@@ -4358,6 +5063,17 @@ function closeDatasetDetail() {
 }
 
 // ===== Disks =====
+async function _silentRefreshDisks() {
+  const el = document.getElementById('disks-content');
+  if (!el) return;
+  try {
+    if (!poolData) await refreshPoolBar();
+    const resp  = await fetch('/api/disks');
+    const disks = await resp.json();
+    renderDisks(el, disks || []);
+  } catch { /* silent */ }
+}
+
 async function loadDisks() {
   const el = document.getElementById('disks-content');
   el.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:32px;">Loading disk info…</div>';
@@ -4429,17 +5145,28 @@ function renderDisks(el, disks) {
     return p;
   };
   const poolDevices = new Set(
-    ((poolData && poolData.members) ? poolData.members : []).map(stripPart)
+    [
+      ...((poolData && poolData.members)        ? poolData.members        : []),
+      ...((poolData && poolData.member_devices) ? poolData.member_devices : []),
+    ].map(stripPart)
   );
-  const poolName = poolData ? poolData.name : '';
-  const isZfsDisk = d => poolDevices.has(d.device) || poolDevices.has('/dev/' + d.name);
+  const cacheDevices = new Set(
+    [
+      ...((poolData && poolData.cache_devs)     ? poolData.cache_devs     : []),
+      ...((poolData && poolData.cache_devices)  ? poolData.cache_devices  : []),
+    ].map(stripPart)
+  );
+  const poolName  = poolData ? poolData.name : '';
+  const isZfsDisk  = d => poolDevices.has(d.device)  || poolDevices.has('/dev/' + d.name);
+  const isCacheDisk = d => cacheDevices.has(d.device) || cacheDevices.has('/dev/' + d.name);
 
   // Disks without vendor+model are likely virtual/OS block devices.
   const hasIdentity = d => !!(d.vendor || d.model);
 
   const zfsAssigned = disks.filter(d => isZfsDisk(d));
-  const available   = disks.filter(d => !isZfsDisk(d) && !d.in_use && hasIdentity(d));
-  const inUse       = disks.filter(d => !isZfsDisk(d) && (d.in_use || !hasIdentity(d)));
+  const cacheDiskList = disks.filter(d => !isZfsDisk(d) && isCacheDisk(d));
+  const available   = disks.filter(d => !isZfsDisk(d) && !isCacheDisk(d) && !d.in_use && hasIdentity(d));
+  const inUse       = disks.filter(d => !isZfsDisk(d) && !isCacheDisk(d) && (d.in_use || !hasIdentity(d)));
 
   let html = '';
 
@@ -4448,15 +5175,19 @@ function renderDisks(el, disks) {
     html += '<div class="table-wrap" style="margin-bottom:28px;"><table>';
     html += diskTableHeader();
     html += '<tbody>' + available.map(d => diskRow(d, false)).join('') + '</tbody></table></div>';
-  } else if (!zfsAssigned.length) {
+  } else if (!zfsAssigned.length && !cacheDiskList.length) {
     html += `<div style="color:var(--text-3);font-size:14px;margin-bottom:24px;">No disks available for ZFS pool creation.</div>`;
   }
 
-  if (zfsAssigned.length) {
-    html += `<h3 style="margin-bottom:12px;color:var(--accent-2);">ZFS Assigned Disks (${zfsAssigned.length})</h3>`;
+  if (zfsAssigned.length || cacheDiskList.length) {
+    const total = zfsAssigned.length + cacheDiskList.length;
+    html += `<h3 style="margin-bottom:12px;color:var(--accent-2);">ZFS Assigned Disks (${total})</h3>`;
     html += '<div class="table-wrap" style="margin-bottom:28px;"><table>';
     html += diskTableHeaderWithPool();
-    html += '<tbody>' + zfsAssigned.map(d => diskRowWithPool(d, poolName)).join('') + '</tbody></table></div>';
+    html += '<tbody>';
+    html += zfsAssigned.map(d => diskRowWithPool(d, poolName)).join('');
+    html += cacheDiskList.map(d => diskRowWithPool(d, '⚡ Cache')).join('');
+    html += '</tbody></table></div>';
   }
 
   if (inUse.length) {
@@ -4477,7 +5208,7 @@ function renderDisks(el, disks) {
 
 function diskTableHeader() {
   return `<thead><tr>
-    <th>Device</th><th>Vendor / Model</th><th>Size</th>
+    <th>Device</th><th>Vendor / Model</th><th>Serial</th><th>Size</th>
     <th>Type</th>
     <th>Wearout <i class="info-tip tip-left tip-down" data-tip="Drive endurance consumed (% of rated P/E cycles or TBW used). From SMART attribute 177 (SSD wear levelling) or 231 (SSD life left). N/A for HDDs without an endurance rating."></i></th>
     <th>Temp <i class="info-tip tip-left tip-down" data-tip="Current drive temperature from SMART data. Read from smartctl JSON (temperature.current field for ATA/NVMe, or attribute IDs 194/190 for older drives). Updated on each SMART refresh."></i></th>
@@ -4487,7 +5218,7 @@ function diskTableHeader() {
 
 function diskTableHeaderWithPool() {
   return `<thead><tr>
-    <th>Device</th><th>Vendor / Model</th><th>Size</th>
+    <th>Device</th><th>Vendor / Model</th><th>Serial</th><th>Size</th>
     <th>Type</th>
     <th>Wearout <i class="info-tip tip-left tip-down" data-tip="Drive endurance consumed (% of rated P/E cycles or TBW used). From SMART attribute 177 (SSD wear levelling) or 231 (SSD life left). N/A for HDDs without an endurance rating."></i></th>
     <th>Temp <i class="info-tip tip-left tip-down" data-tip="Current drive temperature from SMART data. Read from smartctl JSON (temperature.current field for ATA/NVMe, or attribute IDs 194/190 for older drives). Updated on each SMART refresh."></i></th>
@@ -4498,13 +5229,10 @@ function diskTableHeaderWithPool() {
 
 function diskRow(d, dimmed) {
   const tc  = dimmed ? 'color:var(--text-3);' : 'color:var(--text);';
-  const tc2 = dimmed ? 'color:var(--text-3);' : 'color:var(--text-2);';
   return `<tr>
     <td style="font-family:monospace;font-size:13px;${tc}">${esc(d.device)}</td>
-    <td>
-      <div style="font-weight:600;${tc}">${esc(d.vendor||'—')} ${esc(d.model||'—')}</div>
-      ${d.serial ? `<div style="font-size:11px;${tc2}">${esc(d.serial)}</div>` : ''}
-    </td>
+    <td style="font-weight:600;${tc}">${esc(d.vendor||'—')} ${esc(d.model||'—')}</td>
+    <td style="font-family:monospace;font-size:12px;${tc}">${d.serial ? esc(d.serial) : '<span style="color:var(--text-3);">—</span>'}</td>
     <td style="font-family:monospace;${tc}">${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)}</td>
     <td>${diskTypeBadge(d.disk_type, dimmed)}</td>
     <td>${wearoutBar(d, dimmed)}</td>
@@ -4516,16 +5244,17 @@ function diskRow(d, dimmed) {
 function diskRowWithPool(d, poolName) {
   return `<tr>
     <td style="font-family:monospace;font-size:13px;">${esc(d.device)}</td>
-    <td>
-      <div style="font-weight:600;">${esc(d.vendor||'—')} ${esc(d.model||'—')}</div>
-      ${d.serial ? `<div style="font-size:11px;color:var(--text-2);">${esc(d.serial)}</div>` : ''}
-    </td>
+    <td style="font-weight:600;">${esc(d.vendor||'—')} ${esc(d.model||'—')}</td>
+    <td style="font-family:monospace;font-size:12px;">${d.serial ? esc(d.serial) : '<span style="color:var(--text-3);">—</span>'}</td>
     <td style="font-family:monospace;">${d.size_bytes ? fmtBytes(d.size_bytes) : esc(d.size)}</td>
     <td>${diskTypeBadge(d.disk_type, false)}</td>
     <td>${wearoutBar(d, false)}</td>
     <td>${tempBadge(d)}</td>
     <td>${smartBadge(d)}</td>
-    <td><span style="font-family:monospace;font-size:12px;font-weight:600;color:var(--accent-2);">🗄 ${esc(poolName)}</span></td>
+    <td>${poolName === '⚡ Cache'
+      ? `<span style="font-size:12px;font-weight:600;color:#bf5af2;">⚡ L2ARC Cache</span>`
+      : `<span style="font-family:monospace;font-size:12px;font-weight:600;color:var(--accent-2);">🗄 ${esc(poolName)}</span>`
+    }</td>
   </tr>`;
 }
 
@@ -5120,7 +5849,7 @@ async function _autoBinaryVersionCheck() {
     currentEl.textContent = 'v' + data.current;
     latestEl.textContent  = 'v' + data.latest;
     if (data.update_available) {
-      latestEl.style.color = '#ffd60a';
+      latestEl.style.color = 'var(--accent-warn)';
       if (appSettings.live_update_enabled) applyWrap.classList.remove('hidden');
       const badge = document.getElementById('sidebar-update-badge');
       if (badge) badge.classList.remove('hidden');
@@ -5835,7 +6564,7 @@ async function checkBinaryUpdate() {
     latestEl.textContent  = 'v' + data.latest;
     latestEl.style.color  = '';
     if (data.update_available) {
-      latestEl.style.color = '#ffd60a';
+      latestEl.style.color = 'var(--accent-warn)';
       if (appSettings.live_update_enabled) applyWrap.classList.remove('hidden');
     } else {
       uptodateEl.classList.remove('hidden');
@@ -5890,6 +6619,7 @@ function applyBinaryUpdate() {
 document.addEventListener('click', function(e) {
   if (!e.target.classList.contains('modal-backdrop')) return;
   const closeFns = {
+    'modal-pool-settings':    closePoolSettingsModal,
     'modal-add-disks':        closeAddDisksModal,
     'modal-confirm-create-pool':  closeCreatePoolConfirm,
     'modal-add-capacity-guide':   closeAddCapacityGuide,

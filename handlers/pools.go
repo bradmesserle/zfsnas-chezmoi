@@ -24,6 +24,7 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 		Layout      string   `json:"layout"`
 		Ashift      int      `json:"ashift"`
 		Compression string   `json:"compression"`
+		Dedup       string   `json:"dedup"`
 		Devices     []string `json:"devices"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -52,6 +53,10 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 	if req.Compression == "" {
 		req.Compression = "lz4"
 	}
+	validDedup := map[string]bool{"off": true, "on": true, "verify": true}
+	if !validDedup[req.Dedup] {
+		req.Dedup = "off"
+	}
 
 	// Validate minimum device count for layouts.
 	min := map[string]int{"stripe": 1, "mirror": 2, "raidz1": 3, "raidz2": 4}
@@ -61,10 +66,11 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := system.CreatePool(req.Name, req.Layout, req.Ashift, req.Compression, req.Devices); err != nil {
+	if err := system.CreatePool(req.Name, req.Layout, req.Ashift, req.Compression, req.Dedup, req.Devices); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	diskCacheStale = true
 
 	sess := MustSession(r)
 	audit.Log(audit.Entry{
@@ -73,11 +79,74 @@ func HandleCreatePool(w http.ResponseWriter, r *http.Request) {
 		Action:  audit.ActionCreatePool,
 		Target:  req.Name,
 		Result:  audit.ResultOK,
-		Details: req.Layout + " ashift=" + string(rune('0'+req.Ashift)) + " compression=" + req.Compression,
+		Details: req.Layout + " ashift=" + string(rune('0'+req.Ashift)) + " compression=" + req.Compression + " dedup=" + req.Dedup,
 	})
 
 	pool, _ := system.GetPool()
 	jsonCreated(w, pool)
+}
+
+func HandleSetPoolProperties(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Compression string `json:"compression"`
+		Dedup       string `json:"dedup"`
+		Sync        string `json:"sync"`
+		Atime       string `json:"atime"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	pool, err := system.GetPool()
+	if err != nil || pool == nil {
+		jsonErr(w, http.StatusBadRequest, "no pool available")
+		return
+	}
+
+	valid := map[string]map[string]bool{
+		"compression": {"off": true, "lz4": true, "zstd": true, "zstd-fast": true, "gzip": true},
+		"dedup":       {"off": true, "on": true, "verify": true},
+		"sync":        {"standard": true, "always": true, "disabled": true},
+		"atime":       {"on": true, "off": true},
+	}
+	props := map[string]string{}
+	if req.Compression != "" && valid["compression"][req.Compression] {
+		props["compression"] = req.Compression
+	}
+	if req.Dedup != "" && valid["dedup"][req.Dedup] {
+		props["dedup"] = req.Dedup
+	}
+	if req.Sync != "" && valid["sync"][req.Sync] {
+		props["sync"] = req.Sync
+	}
+	if req.Atime != "" && valid["atime"][req.Atime] {
+		props["atime"] = req.Atime
+	}
+	if len(props) == 0 {
+		jsonErr(w, http.StatusBadRequest, "no valid properties to set")
+		return
+	}
+	if err := system.SetPoolProperties(pool.Name, props); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	parts := make([]string, 0, len(props))
+	for k, v := range props {
+		parts = append(parts, k+"="+v)
+	}
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionUpdatePool,
+		Target:  pool.Name,
+		Result:  audit.ResultOK,
+		Details: strings.Join(parts, " "),
+	})
+
+	updated, _ := system.GetPool()
+	jsonOK(w, updated)
 }
 
 func HandlePoolStatus(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +164,7 @@ func HandleGetZFSVersion(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	raidzExpand := major > 2 || (major == 2 && minor >= 4)
+	raidzExpand := major > 2 || (major == 2 && minor >= 2)
 	jsonOK(w, map[string]interface{}{
 		"version":      fmt.Sprintf("%d.%d.%d", major, minor, patch),
 		"major":        major,
@@ -145,6 +214,7 @@ func HandleGrowPool(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, growErr.Error())
 		return
 	}
+	diskCacheStale = true
 
 	sess := MustSession(r)
 	audit.Log(audit.Entry{
@@ -220,6 +290,78 @@ func HandleUpgradePool(w http.ResponseWriter, r *http.Request) {
 		Result: audit.ResultOK,
 	})
 	jsonOK(w, map[string]string{"message": "pool upgraded"})
+}
+
+func HandleAddPoolCache(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Device string `json:"device"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Device = strings.TrimSpace(req.Device)
+	if req.Device == "" {
+		jsonErr(w, http.StatusBadRequest, "device is required")
+		return
+	}
+	pool, err := system.GetPool()
+	if err != nil || pool == nil {
+		jsonErr(w, http.StatusBadRequest, "no pool available")
+		return
+	}
+	if err := system.AddPoolCache(pool.Name, req.Device); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	diskCacheStale = true
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionGrowPool,
+		Target:  pool.Name,
+		Result:  audit.ResultOK,
+		Details: "add cache " + req.Device,
+	})
+	updated, _ := system.GetPool()
+	jsonOK(w, updated)
+}
+
+func HandleRemovePoolCache(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Device string `json:"device"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Device = strings.TrimSpace(req.Device)
+	if req.Device == "" {
+		jsonErr(w, http.StatusBadRequest, "device is required")
+		return
+	}
+	pool, err := system.GetPool()
+	if err != nil || pool == nil {
+		jsonErr(w, http.StatusBadRequest, "no pool available")
+		return
+	}
+	if err := system.RemovePoolCache(pool.Name, req.Device); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	diskCacheStale = true
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionGrowPool,
+		Target:  pool.Name,
+		Result:  audit.ResultOK,
+		Details: "remove cache " + req.Device,
+	})
+	updated, _ := system.GetPool()
+	jsonOK(w, updated)
 }
 
 func HandleDetectPools(w http.ResponseWriter, r *http.Request) {

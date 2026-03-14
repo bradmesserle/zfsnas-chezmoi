@@ -85,6 +85,12 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDestroyPool)))).Methods("POST")
 	r.Handle("/api/pool/upgrade",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleUpgradePool)))).Methods("POST")
+	r.Handle("/api/pool/cache",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleAddPoolCache)))).Methods("POST")
+	r.Handle("/api/pool/cache",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleRemovePoolCache)))).Methods("DELETE")
+	r.Handle("/api/pool/settings",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSetPoolProperties)))).Methods("PUT")
 
 	// --- Datasets ---
 	r.Handle("/api/datasets",

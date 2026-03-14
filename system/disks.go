@@ -394,24 +394,27 @@ func saveSmartCache(configDir string, cache map[string]DiskInfo) error {
 // ---- Helpers ----
 
 // zfsPoolDiskNames returns the set of kernel disk base names (e.g. "sda")
-// that are members of the currently imported ZFS pool.
-// It resolves symlinks such as /dev/disk/by-partuuid/... to real device paths,
-// then strips any partition suffix to get the parent disk name.
+// that are in use by the currently imported ZFS pool — data members AND
+// cache/log devices. Resolves symlinks and strips partition suffixes.
 func zfsPoolDiskNames() map[string]bool {
 	result := make(map[string]bool)
 	pool, err := GetPool()
 	if err != nil || pool == nil {
 		return result
 	}
-	for _, member := range pool.Members {
-		// Resolve symlinks (e.g. /dev/disk/by-partuuid/xxx → /dev/sda1).
-		real, err := filepath.EvalSymlinks(member)
+	addDev := func(dev string) {
+		real, err := filepath.EvalSymlinks(dev)
 		if err != nil {
-			real = member
+			real = dev
 		}
 		base := filepath.Base(real)
-		// Strip partition suffix so sda1 → sda, nvme0n1p1 → nvme0n1.
 		result[diskBaseName(base)] = true
+	}
+	for _, member := range pool.Members {
+		addDev(member)
+	}
+	for _, cache := range pool.CacheDevs {
+		addDev(cache)
 	}
 	return result
 }

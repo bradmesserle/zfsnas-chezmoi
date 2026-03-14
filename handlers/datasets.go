@@ -35,10 +35,16 @@ func HandleListDatasets(w http.ResponseWriter, r *http.Request) {
 
 func HandleCreateDataset(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name        string `json:"name"`
-		Quota       uint64 `json:"quota"`
-		QuotaType   string `json:"quota_type"`
-		Compression string `json:"compression"`
+		Name            string `json:"name"`
+		Quota           uint64 `json:"quota"`
+		QuotaType       string `json:"quota_type"`
+		Refreservation  uint64 `json:"refreservation"`
+		Compression     string `json:"compression"`
+		Sync            string `json:"sync"`
+		Dedup           string `json:"dedup"`
+		CaseSensitivity string `json:"case_sensitivity"`
+		RecordSize      string `json:"record_size"`
+		Comment         string `json:"comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid request body")
@@ -56,7 +62,18 @@ func HandleCreateDataset(w http.ResponseWriter, r *http.Request) {
 		req.Compression = "inherit"
 	}
 
-	if err := system.CreateDataset(req.Name, req.Quota, req.QuotaType, req.Compression); err != nil {
+	opts := system.DatasetCreateOptions{
+		Quota:           req.Quota,
+		QuotaType:       req.QuotaType,
+		Refreservation:  req.Refreservation,
+		Compression:     req.Compression,
+		Sync:            req.Sync,
+		Dedup:           req.Dedup,
+		CaseSensitivity: req.CaseSensitivity,
+		RecordSize:      req.RecordSize,
+		Comment:         strings.TrimSpace(req.Comment),
+	}
+	if err := system.CreateDataset(req.Name, opts); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -82,9 +99,14 @@ func HandleUpdateDataset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Quota       *uint64 `json:"quota"`
-		QuotaType   string  `json:"quota_type"`
-		Compression string  `json:"compression"`
+		Quota          *uint64 `json:"quota"`
+		QuotaType      string  `json:"quota_type"`
+		Refreservation *uint64 `json:"refreservation"`
+		Compression    string  `json:"compression"`
+		Sync           string  `json:"sync"`
+		Dedup          string  `json:"dedup"`
+		RecordSize     string  `json:"record_size"`
+		Comment        *string `json:"comment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid request body")
@@ -103,8 +125,32 @@ func HandleUpdateDataset(w http.ResponseWriter, r *http.Request) {
 			props[qt] = strconv.FormatUint(*req.Quota, 10)
 		}
 	}
+	if req.Refreservation != nil {
+		if *req.Refreservation == 0 {
+			props["refreservation"] = "none"
+		} else {
+			props["refreservation"] = strconv.FormatUint(*req.Refreservation, 10)
+		}
+	}
 	if req.Compression != "" {
 		props["compression"] = req.Compression
+	}
+	if req.Sync != "" {
+		props["sync"] = req.Sync
+	}
+	if req.Dedup != "" {
+		props["dedup"] = req.Dedup
+	}
+	if req.RecordSize != "" {
+		if req.RecordSize == "inherit" {
+			props["recordsize"] = "inherit"
+		} else {
+			props["recordsize"] = req.RecordSize
+		}
+	}
+	if req.Comment != nil {
+		// Empty string clears via `zfs inherit`; non-empty sets the property.
+		props["zfsnas:comment"] = strings.TrimSpace(*req.Comment)
 	}
 
 	if len(props) == 0 {
