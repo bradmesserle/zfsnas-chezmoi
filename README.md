@@ -8,7 +8,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go" alt="Go 1.22+"/>
   <img src="https://img.shields.io/badge/Platform-Ubuntu%2022.04%2B-E95420?style=flat-square&logo=ubuntu" alt="Ubuntu 22.04+"/>
-  <img src="https://img.shields.io/badge/License-MIT-8a2cff?style=flat-square" alt="MIT License"/>
+  <img src="https://img.shields.io/badge/License-GPLv3-8a2cff?style=flat-square" alt="GPLv3 License"/>
   <img src="https://img.shields.io/badge/Version-4.0.0-00eaff?style=flat-square" alt="Version 4.0.0"/>
 </p>
 
@@ -199,4 +199,4 @@ For the full security model, sudo hardening guide, TLS configuration, and authen
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+GNU General Public License v3.0 — see [LICENSE](LICENSE) for details.
