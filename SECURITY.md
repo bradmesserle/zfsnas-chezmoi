@@ -35,28 +35,39 @@ Run `sudo visudo -f /etc/sudoers.d/zfsnas` and paste the block below.
 > **Note:** Paths are correct for Ubuntu 22.04 / 24.04 LTS. Verify with `which <command>` if you are on a different distribution.
 
 ```sudoers
-# ── ZFS ──────────────────────────────────────────────────────────────────────
+# ── ZFS pool management ───────────────────────────────────────────────────────
 Cmnd_Alias ZFSNAS_ZFS = \
     /usr/sbin/zpool list *, \
-    /usr/sbin/zpool status *, \
     /usr/sbin/zpool status, \
+    /usr/sbin/zpool status *, \
     /usr/sbin/zpool create *, \
+    /usr/sbin/zpool import, \
     /usr/sbin/zpool import *, \
     /usr/sbin/zpool import -f *, \
     /usr/sbin/zpool add *, \
     /usr/sbin/zpool attach *, \
+    /usr/sbin/zpool detach *, \
+    /usr/sbin/zpool offline *, \
+    /usr/sbin/zpool online *, \
+    /usr/sbin/zpool clear *, \
+    /usr/sbin/zpool remove *, \
     /usr/sbin/zpool scrub *, \
     /usr/sbin/zpool scrub -s *, \
     /usr/sbin/zpool destroy *, \
     /usr/sbin/zpool upgrade *, \
     /usr/sbin/zfs list *, \
+    /usr/sbin/zfs get *, \
     /usr/sbin/zfs set *, \
+    /usr/sbin/zfs inherit *, \
     /usr/sbin/zfs create *, \
     /usr/sbin/zfs destroy *, \
     /usr/sbin/zfs destroy -r *, \
     /usr/sbin/zfs snapshot *, \
     /usr/sbin/zfs rollback -r *, \
-    /usr/sbin/zfs clone *
+    /usr/sbin/zfs clone *, \
+    /usr/sbin/zfs mount *, \
+    /usr/sbin/zfs load-key *, \
+    /usr/sbin/zfs unload-key *
 
 # ── Samba ─────────────────────────────────────────────────────────────────────
 Cmnd_Alias ZFSNAS_SMB = \
@@ -83,14 +94,25 @@ Cmnd_Alias ZFSNAS_NFS = \
 Cmnd_Alias ZFSNAS_SMART = \
     /usr/sbin/smartctl -j -a *, \
     /usr/sbin/smartctl -j -i *, \
-    /usr/sbin/nvme smart-log -o json *
+    /usr/bin/nvme smart-log -o json *
+
+# ── Disk preparation & wipe ───────────────────────────────────────────────────
+Cmnd_Alias ZFSNAS_DISK = \
+    /usr/bin/wipefs -a *, \
+    /usr/bin/sgdisk --zap-all *, \
+    /usr/bin/sgdisk -n 1\:0\:0 -t 1\:BF01 *, \
+    /usr/bin/dd if=/dev/zero *, \
+    /usr/sbin/partprobe *, \
+    /usr/bin/udevadm settle *, \
+    /usr/sbin/blkid -o export
 
 # ── System ────────────────────────────────────────────────────────────────────
 Cmnd_Alias ZFSNAS_SYSTEM = \
     /usr/bin/timedatectl set-timezone *, \
     /usr/sbin/shutdown -r now, \
     /usr/sbin/shutdown -h now, \
-    /usr/sbin/modprobe zfs
+    /usr/sbin/modprobe zfs, \
+    /usr/bin/systemctl restart zfsnas
 
 # ── OS updates & service install ──────────────────────────────────────────────
 Cmnd_Alias ZFSNAS_APT = \
@@ -103,7 +125,7 @@ Cmnd_Alias ZFSNAS_APT = \
 
 # ── Grant all of the above, passwordless, to the service account ──────────────
 zfsnas ALL=(ALL) NOPASSWD: \
-    ZFSNAS_ZFS, ZFSNAS_SMB, ZFSNAS_NFS, ZFSNAS_SMART, ZFSNAS_SYSTEM, ZFSNAS_APT
+    ZFSNAS_ZFS, ZFSNAS_SMB, ZFSNAS_NFS, ZFSNAS_SMART, ZFSNAS_DISK, ZFSNAS_SYSTEM, ZFSNAS_APT
 ```
 
 ### 3 — Run the portal as the service account
@@ -122,6 +144,10 @@ ExecStart=/opt/zfsnas/zfsnas
 - **Web terminal** — the browser terminal runs a shell as the `zfsnas` user. With the restricted sudoers entry above, any `sudo` command typed in that terminal is still limited to the whitelist. If you do not use the web terminal feature you can remove the `/ws/terminal` route or simply accept that a logged-in admin can run a shell with the same restrictions.
 - **`chmod 777`** — the portal applies this to newly created SMB share paths. If your shares always live under a fixed parent (e.g. `/data`), you can tighten this to `/usr/bin/chmod 777 /data/*`.
 - **`tee` for config files** — write access is limited to the three specific paths listed (`smb.conf`, `exports`, `zfsnas.service`). The wildcard form `tee *` is intentionally avoided.
+- **`dd` / `wipefs` / `sgdisk`** — used by the "Wipe Disk" feature before adding a disk to a pool. These are destructive by design; ensure only trusted admins have access to the portal.
+- **`zfs load-key` / `zfs unload-key`** — used for ZFS native encryption. Key files are stored in `config/keystore/` and are only readable by the `zfsnas` user.
+- **`systemctl restart zfsnas`** — used by the "Restart Portal" option in the power menu. Only available to admin-role users.
+- **Command paths** — paths shown are for Ubuntu 22.04/24.04. Some tools (`sgdisk`, `wipefs`, `nvme`) may live under `/usr/sbin/` instead of `/usr/bin/` on older releases; verify with `which <command>`.
 
 ---
 
