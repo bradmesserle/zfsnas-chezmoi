@@ -477,7 +477,8 @@ input::placeholder { color: var(--text-3); }
 .table-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -729,5 +730,8 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   }
   .sidebar-footer {
     display: none;
+  }
+  .nav-dot {
+    display: none !important;
   }
 }

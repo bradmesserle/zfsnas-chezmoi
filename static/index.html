@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZFS NAS Portal</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" href="/static/favicon.jpg?v=2" type="image/jpeg">
+  <link rel="apple-touch-icon" href="/static/favicon.jpg?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon.jpg?v=2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="ZFS NAS">
@@ -197,19 +198,19 @@
     <button class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">📈</span><span class="nav-label"> Performance</span></button>
 
     <div class="sidebar-section">Storage</div>
-    <button class="nav-item" onclick="showPage('disks')"     id="nav-disks">    <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg></span><span class="nav-label"> Physical Disks</span><span id="nav-disks-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
-    <button class="nav-item" onclick="showPage('pool')"      id="nav-pool">     <span class="nav-icon">🗄</span><span class="nav-label"> ZFS Pool</span><span id="nav-pool-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
-    <button class="nav-item" onclick="showPage('datasets')"  id="nav-datasets"> <span class="nav-icon">📁</span><span class="nav-label"> Datasets</span><span id="nav-datasets-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
+    <button class="nav-item" onclick="showPage('disks')"     id="nav-disks">    <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg></span><span class="nav-label"> Physical Disks</span><span id="nav-disks-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
+    <button class="nav-item" onclick="showPage('pool')"      id="nav-pool">     <span class="nav-icon">🗄</span><span class="nav-label"> ZFS Pool</span><span id="nav-pool-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
+    <button class="nav-item" onclick="showPage('datasets')"  id="nav-datasets"> <span class="nav-icon">📁</span><span class="nav-label"> Datasets</span><span id="nav-datasets-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
     <button class="nav-item" onclick="showPage('snapshots')" id="nav-snapshots"><span class="nav-icon">📸</span><span class="nav-label"> Snapshots</span></button>
 
     <div class="sidebar-section">Sharing</div>
-    <button class="nav-item" onclick="showPage('shares')"    id="nav-shares">   <span class="nav-icon">🔗</span><span class="nav-label"> SMB Shares</span><span id="nav-smb-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
-    <button class="nav-item" onclick="showPage('nfs')"       id="nav-nfs">      <span class="nav-icon">🌐</span><span class="nav-label"> NFS Shares</span><span id="nav-nfs-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
+    <button class="nav-item" onclick="showPage('shares')"    id="nav-shares">   <span class="nav-icon">🔗</span><span class="nav-label"> SMB Shares</span><span id="nav-smb-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
+    <button class="nav-item" onclick="showPage('nfs')"       id="nav-nfs">      <span class="nav-icon">🌐</span><span class="nav-label"> NFS Shares</span><span id="nav-nfs-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
 
     <div class="sidebar-section">System</div>
     <button class="nav-item" onclick="showPage('users')"     id="nav-users">    <span class="nav-icon">👤</span><span class="nav-label"> Users</span></button>
-    <button class="nav-item" onclick="showPage('prereqs')"   id="nav-prereqs">  <span class="nav-icon">🔧</span><span class="nav-label"> Prerequisites</span><span id="prereq-alert-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
-    <button class="nav-item" onclick="showPage('updates')"   id="nav-updates">  <span class="nav-icon">⬆</span><span class="nav-label"> Updates / System</span><span id="nav-updates-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
+    <button class="nav-item" onclick="showPage('prereqs')"   id="nav-prereqs">  <span class="nav-icon">🔧</span><span class="nav-label"> Prerequisites</span><span id="prereq-alert-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
+    <button class="nav-item" onclick="showPage('updates')"   id="nav-updates">  <span class="nav-icon">⬆</span><span class="nav-label"> Updates / System</span><span id="nav-updates-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
     <button class="nav-item" onclick="toggleTermPanel()"     id="nav-terminal"> <span class="nav-icon">⌨</span><span class="nav-label"> Terminal</span></button>
     <button class="nav-item" onclick="showPage('settings')"  id="nav-settings"> <span class="nav-icon">⚙</span><span class="nav-label"> Settings</span></button>
     <button class="nav-item" onclick="openAbout()"            id="nav-about">    <span class="nav-icon">ℹ</span><span class="nav-label"> About / Support</span></button>

@@ -21,8 +21,8 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 	)
 
 	// --- iOS / PWA home-screen icon (no auth needed — iOS fetches before login) ---
-	r.HandleFunc("/apple-touch-icon.png", HandleAppleTouchIcon).Methods("GET")
-	r.HandleFunc("/apple-touch-icon-precomposed.png", HandleAppleTouchIcon).Methods("GET")
+	r.HandleFunc("/apple-touch-icon.png", HandleAppleTouchIcon(readFile)).Methods("GET")
+	r.HandleFunc("/apple-touch-icon-precomposed.png", HandleAppleTouchIcon(readFile)).Methods("GET")
 
 	// --- Pre-auth pages ---
 	r.HandleFunc("/setup", HandleSetupPage(readFile)).Methods("GET")
