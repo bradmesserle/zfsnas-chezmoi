@@ -222,6 +222,10 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(http.HandlerFunc(HandleGetScrubSchedule(appCfg)))).Methods("GET")
 	r.Handle("/api/pool/scrub/schedule",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSetScrubSchedule(appCfg))))).Methods("PUT")
+	r.Handle("/api/treemap/schedule",
+		RequireAuth(http.HandlerFunc(HandleGetTreeMapSchedule(appCfg)))).Methods("GET")
+	r.Handle("/api/treemap/schedule",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSetTreeMapSchedule(appCfg))))).Methods("PUT")
 
 	// --- Snapshot schedules ---
 	r.Handle("/api/snapshot-schedules",
@@ -272,6 +276,20 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 	// --- Dashboard metrics (RRD) ---
 	r.Handle("/api/dashboard/metrics",
 		RequireAuth(http.HandlerFunc(HandleGetDashboardMetrics))).Methods("GET")
+
+	// --- Capacity Trend (multi-resolution RRD) ---
+	r.Handle("/api/capacity/series",
+		RequireAuth(http.HandlerFunc(HandleCapacitySeries))).Methods("GET")
+	r.Handle("/api/capacity/data",
+		RequireAuth(http.HandlerFunc(HandleCapacityData))).Methods("GET")
+	r.Handle("/api/capacity/oldest",
+		RequireAuth(http.HandlerFunc(HandleCapacityOldest))).Methods("GET")
+
+	// --- Folder Usage (Dataset Tree) ---
+	r.Handle("/api/capacity/folder-usage",
+		RequireAuth(http.HandlerFunc(HandleGetFolderUsage(appCfg)))).Methods("GET")
+	r.Handle("/api/capacity/folder-usage/refresh",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleRefreshFolderUsage(appCfg))))).Methods("POST")
 
 	// --- Network interface info ---
 	r.Handle("/api/net/ifaces",

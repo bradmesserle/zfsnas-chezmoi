@@ -40,7 +40,11 @@ func StartMetricsCollector(configDir string) {
 		defer tick.Stop()
 
 		for now := range tick.C {
-			// --- CPU (two readings 500 ms apart for accuracy) ---
+			// --- CPU first ---
+			// Wait briefly so that other goroutines that woke up on the same
+			// tick (health poller, disk I/O poller, etc.) have time to finish
+			// their subprocess work before we sample CPU.
+			time.Sleep(3 * time.Second)
 			cpu1 := readCPUStat()
 			time.Sleep(500 * time.Millisecond)
 			cpu2 := readCPUStat()
@@ -52,7 +56,7 @@ func StartMetricsCollector(configDir string) {
 				}
 			}
 
-			// --- Memory ---
+			// --- Memory (and all other metrics after CPU is recorded) ---
 			if used, cache, app := readMemStats(); used >= 0 {
 				db.Record("mem_used_pct",  used,  now)
 				db.Record("mem_cache_pct", cache, now)

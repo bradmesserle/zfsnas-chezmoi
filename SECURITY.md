@@ -106,6 +106,10 @@ Cmnd_Alias ZFSNAS_DISK = \
     /usr/bin/udevadm settle *, \
     /usr/sbin/blkid -o export
 
+# ── Folder usage scanning ──────────────────────────────────────────────────────
+Cmnd_Alias ZFSNAS_SCAN = \
+    /usr/bin/du -b -d 6 *
+
 # ── System ────────────────────────────────────────────────────────────────────
 Cmnd_Alias ZFSNAS_SYSTEM = \
     /usr/bin/timedatectl set-timezone *, \
@@ -125,7 +129,7 @@ Cmnd_Alias ZFSNAS_APT = \
 
 # ── Grant all of the above, passwordless, to the service account ──────────────
 zfsnas ALL=(ALL) NOPASSWD: \
-    ZFSNAS_ZFS, ZFSNAS_SMB, ZFSNAS_NFS, ZFSNAS_SMART, ZFSNAS_DISK, ZFSNAS_SYSTEM, ZFSNAS_APT
+    ZFSNAS_ZFS, ZFSNAS_SMB, ZFSNAS_NFS, ZFSNAS_SMART, ZFSNAS_DISK, ZFSNAS_SCAN, ZFSNAS_SYSTEM, ZFSNAS_APT
 ```
 
 ### 3 — Run the portal as the service account

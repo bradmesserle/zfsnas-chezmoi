@@ -31,9 +31,10 @@ var embeddedStatic embed.FS
 
 func main() {
 	// ===== Flags =====
-	devMode   := flag.Bool("dev", false, "Serve static files from disk (development mode)")
-	debugMode := flag.Bool("debug", false, "Enable verbose debug logging (lsblk details, etc.)")
-	configDir := flag.String("config", "./config", "Path to config directory")
+	devMode      := flag.Bool("dev", false, "Serve static files from disk (development mode)")
+	debugMode    := flag.Bool("debug", false, "Enable verbose debug logging (lsblk details, etc.)")
+	configDir    := flag.String("config", "./config", "Path to config directory")
+	setHTTPSPort := flag.Int("set-https-port", 0, "Persist a new HTTPS port to config and use it this run (1–65535)")
 	flag.Parse()
 
 	// ===== Sudo check =====
@@ -85,6 +86,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	appCfg.ConfigDir = absConfig
+
+	// ===== --set-https-port override =====
+	if *setHTTPSPort != 0 {
+		if *setHTTPSPort < 1 || *setHTTPSPort > 65535 {
+			fmt.Fprintf(os.Stderr, "ERROR: --set-https-port must be between 1 and 65535 (got %d)\n", *setHTTPSPort)
+			os.Exit(1)
+		}
+		appCfg.Port = *setHTTPSPort
+		if err := config.SaveAppConfig(appCfg); err != nil {
+			log.Fatalf("failed to save config with new port: %v", err)
+		}
+		log.Printf("HTTPS port updated to %d and saved to config.", *setHTTPSPort)
+	}
 
 	// ===== TLS certificates =====
 	certsDir := filepath.Join(absConfig, "certs")
@@ -108,6 +123,9 @@ func main() {
 	// ===== Metrics collector (5-minute samples for 24h RRD charts) =====
 	system.StartMetricsCollector(absConfig)
 
+	// ===== Capacity collector (5-minute samples, 3-tier RRD up to 5 years) =====
+	system.StartCapacityCollector(absConfig)
+
 	// ===== Daily SMART refresh goroutine =====
 	handlers.StartDailySmartRefresh()
 
@@ -122,6 +140,9 @@ func main() {
 
 	// ===== Scrub scheduler =====
 	handlers.StartScrubScheduler(appCfg)
+
+	// ===== TreeMap scheduler =====
+	handlers.StartTreeMapScheduler(appCfg)
 
 	// ===== Recycle bin nightly cleaner =====
 	system.StartRecycleCleaner(absConfig)

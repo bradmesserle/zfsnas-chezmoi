@@ -735,3 +735,64 @@ tr:hover td { background: rgba(255,255,255,0.02); }
     display: none !important;
   }
 }
+
+/* ===== Capacity Trend page ===== */
+.cap-range-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.cap-range-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.cap-range-btn.active {
+  background: rgba(10,132,255,0.15);
+  border-color: rgba(10,132,255,0.4);
+  color: var(--accent-2);
+}
+.cap-selector-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 340px;
+  box-shadow: var(--shadow);
+}
+
+/* Capacity Trend — inner tab bar */
+.cap-tab {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 0;
+  transition: color .15s, border-color .15s;
+}
+.cap-tab:hover { color: var(--text); }
+.cap-tab.active {
+  color: var(--accent-2);
+  border-bottom-color: var(--accent-2);
+}
+
+/* Responsive scan-time label in Dataset Tree Usage tab */
+.cap-scan-short { display: none; }
+@media (max-width: 680px) {
+  .cap-scan-long  { display: none; }
+  .cap-scan-short { display: inline; }
+}

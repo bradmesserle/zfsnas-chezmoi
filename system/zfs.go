@@ -35,10 +35,12 @@ type Pool struct {
 	SizeStr     string   `json:"size_str"`
 	AllocStr    string   `json:"alloc_str"`
 	FreeStr     string   `json:"free_str"`
-	Compression string   `json:"compression"` // root dataset compression
-	Dedup       string   `json:"dedup"`        // root dataset dedup
-	Sync        string   `json:"sync"`         // root dataset sync
-	Atime       string   `json:"atime"`        // root dataset atime
+	Ashift      int      `json:"ashift"`         // pool block size exponent (9=512B, 12=4K, 13=8K)
+	Compression string   `json:"compression"`    // root dataset compression
+	CompRatio   string   `json:"compress_ratio"` // root dataset compressratio
+	Dedup       string   `json:"dedup"`          // root dataset dedup
+	Sync        string   `json:"sync"`           // root dataset sync
+	Atime       string   `json:"atime"`          // root dataset atime
 	Encrypted            bool   `json:"encrypted"`             // encryption property != "off"
 	KeyLocked            bool   `json:"key_locked"`            // keystatus == "unavailable"
 	EncryptionAlgorithm  string `json:"encryption_algorithm"`  // e.g. "aes-256-gcm", "" when off
@@ -69,7 +71,8 @@ func GetPool() (*Pool, error) {
 	p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
 	p.VdevType   = poolVdevType(p.Name)
 	p.Operation  = poolOperation(p.Name)
-	p.Compression, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+	p.Compression, p.CompRatio, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+	p.Ashift = poolAshift(p.Name)
 	p.Encrypted, p.KeyLocked, p.EncryptionAlgorithm = poolEncryptionStatus(p.Name)
 	return p, nil
 }
@@ -118,7 +121,8 @@ func GetAllPools() ([]*Pool, error) {
 		p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
 		p.VdevType  = poolVdevType(p.Name)
 		p.Operation = poolOperation(p.Name)
-		p.Compression, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+		p.Compression, p.CompRatio, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+		p.Ashift = poolAshift(p.Name)
 		p.Encrypted, p.KeyLocked, p.EncryptionAlgorithm = poolEncryptionStatus(p.Name)
 		pools = append(pools, p)
 	}
@@ -148,7 +152,8 @@ func GetPoolByName(name string) (*Pool, error) {
 	p.CacheDevs, p.CacheDevices = poolCacheDevs(p.Name)
 	p.VdevType  = poolVdevType(p.Name)
 	p.Operation = poolOperation(p.Name)
-	p.Compression, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+	p.Compression, p.CompRatio, p.Dedup, p.Sync, p.Atime = poolRootProps(p.Name)
+	p.Ashift = poolAshift(p.Name)
 	p.Encrypted, p.KeyLocked, p.EncryptionAlgorithm = poolEncryptionStatus(p.Name)
 	return p, nil
 }
@@ -925,10 +930,10 @@ func GetZFSVersion() (major, minor, patch int, err error) {
 }
 
 // poolRootProps fetches editable properties from the pool's root dataset.
-func poolRootProps(name string) (compression, dedup, sync_, atime string) {
+func poolRootProps(name string) (compression, compRatio, dedup, sync_, atime string) {
 	out, err := exec.Command("sudo", "zfs", "get", "-Hp",
-		"compression,dedup,sync,atime", name).Output()
-	compression, dedup, sync_, atime = "lz4", "off", "standard", "off"
+		"compression,compressratio,dedup,sync,atime", name).Output()
+	compression, compRatio, dedup, sync_, atime = "lz4", "1.00x", "off", "standard", "off"
 	if err != nil {
 		return
 	}
@@ -940,6 +945,8 @@ func poolRootProps(name string) (compression, dedup, sync_, atime string) {
 		switch f[1] {
 		case "compression":
 			compression = f[2]
+		case "compressratio":
+			compRatio = f[2]
 		case "dedup":
 			dedup = f[2]
 		case "sync":
@@ -949,6 +956,24 @@ func poolRootProps(name string) (compression, dedup, sync_, atime string) {
 		}
 	}
 	return
+}
+
+// poolAshift returns the ashift value for a pool (block size exponent).
+func poolAshift(name string) int {
+	out, err := exec.Command("sudo", "zpool", "get", "-Hp", "ashift", name).Output()
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Split(line, "\t")
+		if len(f) >= 3 && f[1] == "ashift" {
+			v, err := strconv.Atoi(f[2])
+			if err == nil {
+				return v
+			}
+		}
+	}
+	return 0
 }
 
 // poolEncryptionStatus returns (encrypted, keyLocked, algorithm) for a ZFS pool.

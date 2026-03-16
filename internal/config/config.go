@@ -16,14 +16,17 @@ const (
 
 // AppConfig holds top-level application settings.
 type AppConfig struct {
+	ConfigDir         string    `json:"-"` // runtime-only, not persisted
 	Port              int       `json:"port"`
 	StorageUnit       string    `json:"storage_unit,omitempty"`        // "gb" (1000-based) or "gib" (1024-based)
 	SMARTLastRefresh  time.Time `json:"smart_last_refresh,omitempty"`
 	WeeklyScrub       bool      `json:"weekly_scrub"`                  // deprecated: migrated to ScrubSchedule
 	ScrubSchedule     string    `json:"scrub_schedule,omitempty"`      // weekly | biweekly | monthly | 2months | 4months | "" (off)
 	ScrubHour         int       `json:"scrub_hour"`                    // hour of day to run scrub (0-23), default 2
-	LiveUpdateEnabled bool      `json:"live_update_enabled,omitempty"` // enable in-place binary self-update
-	MaxSmbdProcesses  int       `json:"max_smbd_processes,omitempty"`  // Samba max smbd processes (0 = use default 100)
+	LiveUpdateEnabled  bool   `json:"live_update_enabled,omitempty"`  // enable in-place binary self-update
+	MaxSmbdProcesses   int    `json:"max_smbd_processes,omitempty"`   // Samba max smbd processes (0 = use default 100)
+	TreeMapSchedule    string `json:"treemap_schedule,omitempty"`     // daily | weekly | biweekly | monthly | "" (off)
+	TreeMapHour        int    `json:"treemap_hour"`                   // hour of day to run treemap scan (0-23)
 }
 
 // UserPreferences holds per-user UI preferences persisted across sessions.

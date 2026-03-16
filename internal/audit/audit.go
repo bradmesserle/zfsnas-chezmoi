@@ -68,6 +68,8 @@ const (
 	ActionPoolRecovered  = "pool_recovered"
 	ActionDiskProblem    = "disk_problem"
 	ActionDiskRecovered  = "disk_recovered"
+	ActionFolderScan         = "folder_scan"
+	ActionTreeMapScheduleScan = "treemap_schedule_scan"
 	// 2FA events.
 	Action2FAEnabled  = "2fa_enabled"
 	Action2FADisabled = "2fa_disabled"

@@ -28,13 +28,17 @@
         <div class="form-group">
           <label for="username">Username</label>
           <input type="text" id="username" name="username"
-                 placeholder="Your username" autocomplete="username" required autofocus>
+                 placeholder="Your username" autocomplete="username" required>
         </div>
 
         <div class="form-group">
           <label for="password">Password</label>
           <input type="password" id="password" name="password"
                  placeholder="Your password" autocomplete="current-password" required>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--text-2);cursor:pointer;user-select:none;">
+            <input type="checkbox" id="remember-username" style="width:auto;margin:0;">
+            Save username
+          </label>
         </div>
 
         <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
@@ -67,6 +71,18 @@
 
   <script>
     let _pendingTotpToken = '';
+
+    // Restore saved username on load.
+    (function() {
+      const saved = localStorage.getItem('zfsnas_saved_username');
+      if (saved) {
+        document.getElementById('username').value = saved;
+        document.getElementById('remember-username').checked = true;
+        document.getElementById('password').focus();
+      } else {
+        document.getElementById('username').focus();
+      }
+    })();
 
     // Auto-redirect if already logged in.
     (async () => {
@@ -103,6 +119,14 @@
           btn.disabled = false;
           btn.innerHTML = 'Sign In';
           return;
+        }
+
+        // Save or clear username based on checkbox.
+        const uname = form.username.value.trim();
+        if (document.getElementById('remember-username').checked) {
+          localStorage.setItem('zfsnas_saved_username', uname);
+        } else {
+          localStorage.removeItem('zfsnas_saved_username');
         }
 
         if (data.totp_required) {

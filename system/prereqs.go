@@ -111,6 +111,10 @@ var requiredSudoCmds = []string{
 	"exportfs",
 	// System
 	"timedatectl", "shutdown",
+	// Folder usage scanning
+	"du",
+	// Disk preparation & wipe (ZFSNAS_DISK in SECURITY.md)
+	"wipefs", "sgdisk", "dd", "partprobe", "udevadm", "blkid",
 }
 
 // CheckSudoAccess probes the effective sudo permissions of the running process.

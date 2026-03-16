@@ -195,10 +195,11 @@
     </div>
 
     <div class="sidebar-section">Overview</div>
-    <button class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">📈</span><span class="nav-label"> Performance</span></button>
+    <button class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">🎛️</span><span class="nav-label"> Performance</span></button>
+    <button class="nav-item" onclick="showPage('capacity')"  id="nav-capacity"> <span class="nav-icon">📊</span><span class="nav-label"> Capacity Trend</span></button>
 
     <div class="sidebar-section">Storage</div>
-    <button class="nav-item" onclick="showPage('disks')"     id="nav-disks">    <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg></span><span class="nav-label"> Physical Disks</span><span id="nav-disks-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
+    <button class="nav-item" onclick="showPage('disks')"     id="nav-disks">    <span class="nav-icon"><svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98.96 122.88" width="18" height="18" fill="currentColor" style="vertical-align:middle;display:inline-block;"><path d="M5.44,0h88.09c1.49,0,2.85,0.61,3.83,1.59l0.01,0.01c0.98,0.98,1.59,2.34,1.59,3.83v89.92v22.09c0,1.49-0.61,2.85-1.59,3.83l-0.01,0.01c-0.98,0.98-2.34,1.59-3.83,1.59H5.44c-1.5,0-2.86-0.61-3.84-1.59C0.61,120.3,0,118.94,0,117.44V95.36V5.44c0-1.49,0.61-2.85,1.59-3.83l0.01-0.01C2.59,0.61,3.95,0,5.44,0L5.44,0z M64.96,21.3h6.63c4.28,0,7.17,0.19,8.68,0.59c1.51,0.4,2.66,1.04,3.44,1.94c0.78,0.9,1.28,1.9,1.47,3c0.19,1.11,0.29,3.27,0.29,6.5v11.94c0,3.06-0.14,5.11-0.43,6.14c-0.29,1.03-0.79,1.85-1.5,2.43c-0.72,0.58-1.6,0.98-2.66,1.22c-1.05,0.23-2.64,0.35-4.76,0.35H64.96V21.3L64.96,21.3z M73.84,27.12v22.46c1.26,0,2.03-0.26,2.32-0.77c0.29-0.52,0.44-1.91,0.44-4.19V31.36c0-1.54-0.05-2.54-0.14-2.97c-0.1-0.44-0.32-0.75-0.67-0.96C75.45,27.22,74.8,27.12,73.84,27.12L73.84,27.12z M41.14,21.3h6.63c4.28,0,7.17,0.19,8.68,0.59c1.51,0.4,2.66,1.04,3.44,1.94c0.78,0.9,1.28,1.9,1.47,3c0.19,1.11,0.29,3.27,0.29,6.5v11.94c0,3.06-0.14,5.11-0.43,6.14c-0.29,1.03-0.79,1.85-1.5,2.43c-0.72,0.58-1.6,0.98-2.66,1.22c-1.05,0.23-2.64,0.35-4.76,0.35H41.14V21.3L41.14,21.3z M50.02,27.12v22.46c1.26,0,2.03-0.26,2.32-0.77c0.29-0.52,0.44-1.91,0.44-4.19V31.36c0-1.54-0.05-2.54-0.14-2.97c-0.1-0.44-0.32-0.75-0.67-0.96C51.62,27.22,50.97,27.12,50.02,27.12L50.02,27.12z M37.55,21.3v34.1h-8.88V41.09h-2.59V55.4H17.2V21.3h8.88v12.2h2.59V21.3H37.55L37.55,21.3z M74.51,104.48h11.45c0.58,0,1.05,0.48,1.05,1.05v4.03c0,0.57-0.48,1.05-1.05,1.05H74.51c-0.57,0-1.05-0.47-1.05-1.05v-4.03C73.46,104.95,73.93,104.48,74.51,104.48L74.51,104.48z M5.62,92.55h87.72V5.62H5.62V92.55L5.62,92.55z M93.34,98.17H5.62v19.09h87.72V98.17L93.34,98.17z"/></svg></span><span class="nav-label"> Physical Disks</span><span id="nav-disks-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
     <button class="nav-item" onclick="showPage('pool')"      id="nav-pool">     <span class="nav-icon">🗄</span><span class="nav-label"> ZFS Pool</span><span id="nav-pool-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;margin-left:auto;flex-shrink:0;"></span></button>
     <button class="nav-item" onclick="showPage('datasets')"  id="nav-datasets"> <span class="nav-icon">📁</span><span class="nav-label"> Datasets</span><span id="nav-datasets-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
     <button class="nav-item" onclick="showPage('snapshots')" id="nav-snapshots"><span class="nav-icon">📸</span><span class="nav-label"> Snapshots</span></button>
@@ -211,7 +212,7 @@
     <button class="nav-item" onclick="showPage('users')"     id="nav-users">    <span class="nav-icon">👤</span><span class="nav-label"> Users</span></button>
     <button class="nav-item" onclick="showPage('prereqs')"   id="nav-prereqs">  <span class="nav-icon">🔧</span><span class="nav-label"> Prerequisites</span><span id="prereq-alert-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
     <button class="nav-item" onclick="showPage('updates')"   id="nav-updates">  <span class="nav-icon">⬆</span><span class="nav-label"> Updates / System</span><span id="nav-updates-dot" class="nav-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#f0b429;margin-left:auto;flex-shrink:0;box-shadow:0 0 4px rgba(240,180,41,0.6);"></span></button>
-    <button class="nav-item" onclick="toggleTermPanel()"     id="nav-terminal"> <span class="nav-icon">⌨</span><span class="nav-label"> Terminal</span></button>
+    <button class="nav-item" onclick="toggleTermPanel()"     id="nav-terminal"> <span class="nav-icon">🖥️</span><span class="nav-label"> Terminal</span></button>
     <button class="nav-item" onclick="showPage('settings')"  id="nav-settings"> <span class="nav-icon">⚙</span><span class="nav-label"> Settings</span></button>
     <button class="nav-item" onclick="openAbout()"            id="nav-about">    <span class="nav-icon">ℹ</span><span class="nav-label"> About / Support</span></button>
   </nav>
@@ -327,7 +328,7 @@
                 </div>
               </div>
               <div id="dash-net-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px;"></div>
-              <div style="position:relative;height:120px;"><canvas id="dash-chart-net"></canvas></div>
+              <div style="position:relative;height:120px;overflow:visible;"><canvas id="dash-chart-net"></canvas></div>
             </div>
             <div class="card-sm">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -357,6 +358,131 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- CAPACITY TREND -->
+      <div class="page hidden" id="page-capacity" style="padding-top:0;padding-bottom:0;">
+        <!-- Tab bar flush at top -->
+        <div style="display:flex;gap:2px;margin-bottom:20px;border-bottom:1px solid var(--border);margin-left:-32px;margin-right:-32px;padding:0 32px;">
+          <button class="cap-tab active" data-tab="trending" onclick="switchCapTab('trending')">Datasets Trending</button>
+          <button class="cap-tab"        data-tab="tree"     onclick="switchCapTab('tree')">Storage TreeMap</button>
+        </div>
+
+        <!-- TAB: Datasets Trending -->
+        <div id="cap-tab-trending">
+        <!-- Header: title + selector button + time range -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;position:relative;">
+          <!-- Blue dropdown selector button -->
+          <button id="cap-selector-btn" onclick="toggleCapSelector()"
+                  style="background:rgba(10,132,255,0.15);border:1px solid rgba(10,132,255,0.4);
+                         color:var(--accent);border-radius:8px;padding:6px 14px;font-size:13px;
+                         font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <span id="cap-selector-label">Select pools &amp; datasets…</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <!-- Selector dropdown panel -->
+          <div id="cap-selector-panel" class="cap-selector-panel hidden">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);">Select Series</span>
+                <i class="info-tip" data-tip="Check pools and datasets to include in the chart.&#10;&#10;&#x2713; Clicking a pool header selects/deselects all its datasets.&#10;&#x2713; Datasets can be individually toggled.&#10;&#x2713; Datasets under 100 MB are greyed out and excluded from&#10;  the graph even if checked.&#10;&#x2713; Your selection is remembered across navigation and logout."></i>
+              </span>
+              <span>
+                <a onclick="capSelectAll()" style="cursor:pointer;color:var(--accent);font-size:12px;margin-right:12px;">All</a>
+                <a onclick="capDeselectAll()" style="cursor:pointer;color:var(--text-3);font-size:12px;">None</a>
+              </span>
+            </div>
+            <div id="cap-tree" style="max-height:320px;overflow-y:auto;"></div>
+            <div style="margin-top:12px;text-align:right;">
+              <button onclick="applyCapSelection();toggleCapSelector()"
+                      style="background:var(--accent-2);color:#fff;border:none;border-radius:8px;
+                             padding:6px 18px;font-size:13px;font-weight:600;cursor:pointer;">Apply</button>
+            </div>
+          </div>
+          <!-- Time range selector + aggregate picker -->
+          <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+            <button class="cap-range-btn active" data-range="all"   onclick="setCapRange('all')">Since Data</button>
+            <button class="cap-range-btn"        data-range="day"   onclick="setCapRange('day')">Day</button>
+            <button class="cap-range-btn"        data-range="week"  onclick="setCapRange('week')">Week</button>
+            <button class="cap-range-btn"        data-range="month" onclick="setCapRange('month')">Month</button>
+            <button class="cap-range-btn"        data-range="year"  onclick="setCapRange('year')">Year</button>
+            <select id="cap-agg-select" onchange="setCapAgg(this.value)"
+                    style="padding:3px 20px 3px 4px;font-size:12px;font-weight:600;width:62px;
+                           border-radius:6px;border:1px solid rgba(191,90,242,0.4);
+                           background:rgba(191,90,242,0.12) url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23bf5af2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;) no-repeat right 4px center;
+                           color:var(--accent-1);cursor:pointer;appearance:none;-webkit-appearance:none;">
+              <option value="avg">Avg</option>
+              <option value="min">Min</option>
+              <option value="max">Max</option>
+            </select>
+          </div>
+        </div>
+        <!-- Chart card -->
+        <div class="card-sm" style="padding:20px;" id="cap-chart-card">
+          <canvas id="cap-chart" style="width:100%;"></canvas>
+        </div>
+        <!-- No-data state -->
+        <div id="cap-no-data" class="hidden" style="text-align:center;padding:60px 20px;color:var(--text-3);">
+          <div style="font-size:40px;margin-bottom:12px;">📊</div>
+          <div style="font-weight:600;font-size:16px;color:var(--text-2);margin-bottom:8px;">No capacity data yet</div>
+          <p style="margin:0;">Data will appear after the first 5-minute collection interval.</p>
+        </div>
+        </div><!-- end cap-tab-trending -->
+
+        <!-- TAB: Dataset Tree Usage -->
+        <div id="cap-tab-tree" class="hidden">
+          <!-- Header row: left = dataset selector, right = scan time + back + refresh -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select id="cap-tree-ds-select" onchange="capTreeSelectDataset(this.value)"
+                      style="padding:6px 14px;font-size:13px;font-weight:600;border-radius:8px;
+                             background:rgba(10,132,255,0.15);border:1px solid rgba(10,132,255,0.4);
+                             color:var(--accent-2);cursor:pointer;max-width:360px;width:fit-content;">
+                <option value="">— choose a dataset —</option>
+              </select>
+              <i class="info-tip tip-right" data-tip="The Storage TreeMap is built by scanning folder sizes on disk. To keep it up to date automatically, configure a refresh schedule in Settings → Folder TreeMap Schedule."></i>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              <button id="cap-tree-back-btn" class="hidden" onclick="capTreeBack()"
+                      style="padding:4px 10px;font-size:12px;font-weight:600;border-radius:8px;
+                             border:none;background:var(--accent-1);color:#fff;cursor:pointer;white-space:nowrap;">← Back</button>
+              <span id="cap-tree-scan-time" style="font-size:12px;color:var(--text-3);white-space:nowrap;"><span class="cap-scan-long"></span><span class="cap-scan-short"></span></span>
+              <button onclick="capTreeRefresh()"
+                      style="padding:4px 10px;font-size:12px;font-weight:600;border-radius:8px;border:none;
+                             background:var(--accent-2);color:#fff;cursor:pointer;white-space:nowrap;">
+                ↻ ReScan
+              </button>
+            </div>
+          </div>
+          <!-- Breadcrumb -->
+          <div id="cap-tree-breadcrumb" style="font-size:12px;color:var(--text-3);margin-bottom:10px;"></div>
+          <!-- Treemap SVG container -->
+          <div class="card-sm hidden" style="padding:0;overflow:hidden;position:relative;" id="cap-tree-card">
+            <svg id="cap-tree-svg" style="width:100%;display:block;" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+          <!-- Treemap hover tooltip -->
+          <div id="cap-tree-tooltip" style="
+            display:none;position:fixed;pointer-events:none;z-index:200;
+            background:var(--surface);border:1px solid var(--border);border-radius:8px;
+            padding:8px 12px;box-shadow:var(--shadow);min-width:160px;max-width:260px;">
+            <div id="cap-tree-tt-name"  style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:4px;word-break:break-all;"></div>
+            <div id="cap-tree-tt-size"  style="font-size:12px;color:var(--text-2);"></div>
+            <div id="cap-tree-tt-pct"   style="font-size:12px;color:var(--text-3);"></div>
+          </div>
+          <!-- Empty/no-data states -->
+          <div id="cap-tree-no-data" class="hidden"
+               style="text-align:center;padding:60px 20px;color:var(--text-3);">
+            <div style="font-size:36px;margin-bottom:12px;">📂</div>
+            <div style="font-weight:600;font-size:15px;color:var(--text-2);margin-bottom:8px;" id="cap-tree-no-data-title">No scan data yet</div>
+            <p id="cap-tree-no-data-msg" style="margin:0 0 20px;">Select a pool above, then click <strong>↻ ReScan</strong> to start a background scan.</p>
+          </div>
+          <div id="cap-tree-scanning" class="hidden"
+               style="text-align:center;padding:60px 20px;color:var(--text-3);">
+            <div style="font-size:36px;margin-bottom:12px;">⏳</div>
+            <div style="font-weight:600;font-size:15px;color:var(--text-2);">Scanning…</div>
+            <p style="margin:0;">This may take a while for large datasets. Check the activity bar below.</p>
+          </div>
+        </div><!-- end cap-tab-tree -->
       </div>
 
       <!-- PREREQUISITES -->
@@ -669,7 +795,7 @@
             <div class="text-3 text-sm" style="margin-top:4px;">Requires a server restart to take effect.</div>
           </div>
 
-          <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:8px;">Save Settings</button>
+          <button class="btn btn-primary btn-sm" onclick="saveSettings()" style="margin-top:8px;">Apply</button>
         </div>
 
         <!-- Samba card -->
@@ -702,7 +828,7 @@
               <option value="">Loading…</option>
             </select>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="saveTimezone()">Apply Timezone</button>
+          <button class="btn btn-primary btn-sm" onclick="saveTimezone()">Apply</button>
         </div>
 
         <!-- Encryption Key Management -->
@@ -812,8 +938,29 @@
           </div>
 
           <div style="display:flex;gap:8px;margin-top:20px;">
-            <button class="btn btn-primary" onclick="saveAlerts()">Save Alerts</button>
-            <button class="btn btn-ghost"   onclick="testAlert()">Send Test Email</button>
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts()">Apply</button>
+            <button class="btn btn-ghost btn-sm"   onclick="testAlert()">Send Test Email</button>
+          </div>
+        </div>
+
+        <!-- Folder TreeMap Schedule card -->
+        <div class="card">
+          <h3 style="margin-bottom:4px;">Folder TreeMap Schedule</h3>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Automatically refresh the Storage TreeMap for every pool. Pools are scanned one after the other and each scan is logged in the activity log.</p>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <select id="treemap-schedule-select" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text-1);padding:5px 10px;font-size:13px;cursor:pointer;" onchange="setTreeMapSchedule()">
+              <option value="">Off</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly (every Sunday)</option>
+              <option value="biweekly">Bi-Weekly (1st &amp; 3rd Sunday)</option>
+              <option value="monthly">Monthly (1st of month)</option>
+            </select>
+            <div id="treemap-hour-wrap" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);">
+              at
+              <select id="treemap-hour-select" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text-1);padding:5px 8px;font-size:13px;cursor:pointer;" onchange="setTreeMapSchedule()">
+              </select>
+              :00
+            </div>
           </div>
         </div>
 
@@ -1130,6 +1277,21 @@
       <button class="modal-close" onclick="closeDatasetDetail()">✕</button>
     </div>
     <div class="modal-body" style="padding-top:12px;">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="closeDatasetDetail();showPage('datasets')">Go to Datasets</button>
+        <button onclick="openDatasetTrending()"
+                style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:600;border-radius:8px;border:none;cursor:pointer;
+                       background:linear-gradient(135deg,#6e40c9 0%,#2d7dd2 50%,#0dbbbd 100%);color:#fff;
+                       box-shadow:0 0 10px rgba(110,64,201,0.4);letter-spacing:.02em;">
+          <span style="font-size:14px;">✦</span> Trending
+        </button>
+        <button onclick="openDatasetTreeMap()"
+                style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:600;border-radius:8px;border:none;cursor:pointer;
+                       background:linear-gradient(135deg,#6e40c9 0%,#2d7dd2 50%,#0dbbbd 100%);color:#fff;
+                       box-shadow:0 0 10px rgba(110,64,201,0.4);letter-spacing:.02em;">
+          <span style="font-size:14px;">✦</span> Folder TreeMap
+        </button>
+      </div>
       <div id="dsd-usage-bar" style="height:6px;border-radius:3px;background:var(--surface2);margin-bottom:16px;overflow:hidden;">
         <div id="dsd-usage-fill" style="height:100%;border-radius:3px;transition:width .3s;"></div>
       </div>
@@ -1167,10 +1329,6 @@
           <span id="dsd-comment" class="stat-value" style="font-style:italic;word-break:break-word;"></span>
         </div>
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeDatasetDetail()">Close</button>
-      <button class="btn btn-primary btn-sm" onclick="closeDatasetDetail();showPage('datasets')">Go to Datasets →</button>
     </div>
   </div>
 </div>
@@ -2601,6 +2759,7 @@ function showPage(name) {
   if (name === 'updates')   initUpdatesPage();
   if (name !== 'dashboard') { clearInterval(_dashRefreshTimer); _dashRefreshTimer = null; }
   if (name === 'dashboard') loadDashboard();
+  if (name === 'capacity')  loadCapacityPage();
 }
 
 // ===== Logout =====
@@ -2740,14 +2899,15 @@ async function checkPrereqsBanner() {
     prereqData = await resp.json();
     const missing = prereqData.packages.filter(p => !p.installed);
     const sudo = prereqData.sudo_access || {};
-    const sudoError = sudo.type === 'none' || (sudo.type === 'hardened' && (sudo.missing_commands || []).length > 0);
+    const sudoCritical = sudo.type === 'none';
+    const sudoError = sudoCritical || (sudo.type === 'hardened' && (sudo.missing_commands || []).length > 0);
     const needsAttention = missing.length > 0 || prereqData.zfs_module_warn || sudoError;
     const banner  = document.getElementById('prereq-banner');
     const dot     = document.getElementById('prereq-alert-dot');
     if (dot) {
       dot.style.display = needsAttention ? 'inline-block' : 'none';
-      dot.style.background = sudoError ? '#ff3b30' : '#f0b429';
-      dot.style.boxShadow  = sudoError ? '0 0 4px rgba(255,59,48,0.6)' : '0 0 4px rgba(240,180,41,0.6)';
+      dot.style.background = sudoCritical ? '#ff3b30' : '#f0b429';
+      dot.style.boxShadow  = sudoCritical ? '0 0 4px rgba(255,59,48,0.6)' : '0 0 4px rgba(240,180,41,0.6)';
     }
     if (missing.length) {
       banner.className = 'banner banner-warn';
@@ -2789,7 +2949,8 @@ async function loadPrereqs() {
   // ── Sudo security row ─────────────────────────────────────────────────────
   const sudo = prereqData.sudo_access || {};
   const sudoMissing = sudo.missing_commands || [];
-  const sudoError = sudo.type === 'none' || (sudo.type === 'hardened' && sudoMissing.length > 0);
+  const sudoCritical = sudo.type === 'none';
+  const sudoError = sudoCritical || (sudo.type === 'hardened' && sudoMissing.length > 0);
   let sudoIcon, sudoLabel, sudoLabelColor, sudoDesc;
   if (sudo.type === 'root') {
     sudoIcon = '⚠'; sudoLabelColor = '#f0b429';
@@ -2832,8 +2993,8 @@ async function loadPrereqs() {
   const dot = document.getElementById('prereq-alert-dot');
   if (dot) {
     dot.style.display = needsAttention ? 'inline-block' : 'none';
-    dot.style.background = sudoError ? '#ff3b30' : '#f0b429';
-    dot.style.boxShadow  = sudoError ? '0 0 4px rgba(255,59,48,0.6)' : '0 0 4px rgba(240,180,41,0.6)';
+    dot.style.background = sudoCritical ? '#ff3b30' : '#f0b429';
+    dot.style.boxShadow  = sudoCritical ? '0 0 4px rgba(255,59,48,0.6)' : '0 0 4px rgba(240,180,41,0.6)';
   }
 
   document.getElementById('prereq-list').innerHTML = prereqData.packages.map(p => {
@@ -3368,6 +3529,29 @@ async function loadSettings() {
     if (maxSmbd) maxSmbd.value = appSettings.max_smbd_processes || 100;
   } catch {}
   loadTimezone();
+  loadTreeMapScheduleSettings();
+}
+
+async function loadTreeMapScheduleSettings() {
+  try {
+    const resp = await fetch('/api/treemap/schedule');
+    if (!resp.ok) return;
+    const sched = await resp.json();
+    const schedSel = document.getElementById('treemap-schedule-select');
+    const hourSel  = document.getElementById('treemap-hour-select');
+    const hourWrap = document.getElementById('treemap-hour-wrap');
+    if (hourSel && hourSel.options.length === 0) {
+      for (let h = 0; h < 24; h++) {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = String(h).padStart(2, '0') + ':00';
+        hourSel.appendChild(opt);
+      }
+    }
+    if (schedSel) schedSel.value = sched.schedule || '';
+    if (hourSel)  hourSel.value  = sched.hour ?? 2;
+    if (hourWrap) hourWrap.style.display = sched.schedule ? 'flex' : 'none';
+  } catch {}
 }
 
 let _tzLoaded = false;
@@ -4153,24 +4337,7 @@ function renderPoolExists(el, pool) {
     : '';
 
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
-      <div class="card-sm">
-        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Health</div>
-        <div style="font-size:20px;font-weight:700;color:${healthColor};">${poolStatusLabel(pool)}</div>
-      </div>
-      <div class="card-sm">
-        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Usable Capacity</div>
-        <div style="font-size:18px;font-weight:700;">${fmtBytes(usableSize)}</div>
-      </div>
-      <div class="card-sm">
-        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Used</div>
-        <div style="font-size:18px;font-weight:700;color:var(--accent-2);">${fmtBytes(usableUsed)}</div>
-      </div>
-      <div class="card-sm">
-        <div class="text-3 text-xs mb-1" style="text-transform:uppercase;letter-spacing:.08em;">Available</div>
-        <div style="font-size:18px;font-weight:700;color:var(--accent-3);">${fmtBytes(usableAvail)}</div>
-      </div>
-    </div>
+
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
       <div class="card" style="min-width:0;">
@@ -4185,13 +4352,10 @@ function renderPoolExists(el, pool) {
       </div>
       <div class="card" style="min-width:0;">
         <h3 style="margin-bottom:16px;">Pool Details</h3>
-        <div class="stat-row"><span class="stat-label">Pool name</span><span class="stat-value">${esc(pool.name)}</span></div>
-        <div class="stat-row"><span class="stat-label">Health</span><span class="stat-value" style="color:${healthColor};">${poolStatusLabel(pool)}</span></div>
-        <div class="stat-row"><span class="stat-label">Usable capacity</span><span class="stat-value">${fmtBytes(usableSize)}</span></div>
-        <div class="stat-row"><span class="stat-label">Used</span><span class="stat-value">${fmtBytes(usableUsed)}</span></div>
-        <div class="stat-row"><span class="stat-label">Available</span><span class="stat-value">${fmtBytes(usableAvail)}</span></div>
         <div class="stat-row"><span class="stat-label">Raw pool size</span><span class="stat-value text-3" style="font-size:12px;">${fmtBytes(pool.size)}</span></div>
+        <div class="stat-row"><span class="stat-label">Block size (ashift)</span><span class="stat-value">${pool.ashift ? pool.ashift + ' <span style="color:var(--text-3);font-size:12px;">(' + (pool.ashift===9?'512 B':pool.ashift===12?'4 KiB':pool.ashift===13?'8 KiB':(1<<pool.ashift)+' B') + ')</span>' : '—'}</span></div>
         <div class="stat-row"><span class="stat-label">Compression</span><span class="stat-value">${esc(pool.compression||'—')}</span></div>
+        <div class="stat-row"><span class="stat-label">Compress ratio</span><span class="stat-value">${esc(pool.compress_ratio||'—')}</span></div>
         <div class="stat-row"><span class="stat-label">Dedup</span><span class="stat-value">${esc(pool.dedup||'—')}</span></div>
         <div class="stat-row"><span class="stat-label">Sync</span><span class="stat-value">${esc(pool.sync||'—')}</span></div>
         <div class="stat-row"><span class="stat-label">Access time</span><span class="stat-value">${esc(pool.atime||'—')}</span></div>
@@ -4237,6 +4401,7 @@ function renderPoolExists(el, pool) {
           </div>
         </div>
       </div>
+
     </div>`;
 }
 
@@ -4645,10 +4810,10 @@ async function _fetchScrubStatus() {
       fetch('/api/pool/scrub/schedule'),
     ]);
     if (!sResp.ok) return;
-    const s    = await sResp.json();
+    const s     = await sResp.json();
     const sched = schedResp.ok ? await schedResp.json() : {};
 
-    // Populate schedule selects
+    // Populate scrub schedule selects
     const schedSel = document.getElementById('scrub-schedule-select');
     const hourSel  = document.getElementById('scrub-hour-select');
     const hourWrap = document.getElementById('scrub-hour-wrap');
@@ -4732,6 +4897,18 @@ async function setScrubSchedule() {
   const hourWrap = document.getElementById('scrub-hour-wrap');
   if (hourWrap) hourWrap.style.display = schedule ? 'flex' : 'none';
   await fetch('/api/pool/scrub/schedule', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule, hour }),
+  });
+}
+
+async function setTreeMapSchedule() {
+  const schedule = document.getElementById('treemap-schedule-select')?.value ?? '';
+  const hour     = parseInt(document.getElementById('treemap-hour-select')?.value ?? '2', 10);
+  const hourWrap = document.getElementById('treemap-hour-wrap');
+  if (hourWrap) hourWrap.style.display = schedule ? 'flex' : 'none';
+  await fetch('/api/treemap/schedule', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ schedule, hour }),
@@ -6341,6 +6518,15 @@ async function loadSnapshots() {
   }
 }
 
+function toggleSnapDs(bodyId, headerEl) {
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  const chev = headerEl.querySelector('svg.snap-ds-chev');
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if (chev) chev.style.transform = collapsed ? '' : 'rotate(-90deg)';
+}
+
 function renderSnapshots(el, snaps) {
   if (!snaps.length) {
     el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📸</div><h3>No snapshots yet</h3><p>Click 📸 on a dataset to create one.</p></div>';
@@ -6350,6 +6536,7 @@ function renderSnapshots(el, snaps) {
   // Determine pools present.
   const poolNames = [...new Set(snaps.map(s => s.dataset.split('/')[0]))];
   const multiPool = poolNames.length > 1;
+  let _dsCtr = 0;
 
   function renderPoolSnaps(poolName) {
     const poolSnaps = snaps.filter(s => s.dataset.split('/')[0] === poolName);
@@ -6359,14 +6546,18 @@ function renderSnapshots(el, snaps) {
       if (!grouped[s.dataset]) grouped[s.dataset] = [];
       grouped[s.dataset].push(s);
     });
-    const body = Object.entries(grouped).map(([dataset, list]) => `
+    const body = Object.entries(grouped).map(([dataset, list]) => {
+      const bodyId = 'snap-ds-body-' + (_dsCtr++);
+      return `
       <div style="margin-bottom:20px;">
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:2px solid var(--border);margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:2px solid var(--border);margin-bottom:8px;cursor:pointer;user-select:none;" onclick="toggleSnapDs('${bodyId}', this)">
+          <svg class="snap-ds-chev" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3);transition:transform .15s;flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
           <span style="opacity:.6;">📁</span>
           <span style="font-weight:700;font-size:15px;">${esc(dataset)}</span>
           <span class="badge badge-readonly" style="margin-left:4px;">${list.length} snapshot${list.length!==1?'s':''}</span>
-          ${currentUser.role==='admin' ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="openCreateSnapshot('${esc(dataset)}')">+ Snapshot</button>` : ''}
+          ${currentUser.role==='admin' ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="event.stopPropagation();openCreateSnapshot('${esc(dataset)}')">+ Snapshot</button>` : ''}
         </div>
+        <div id="${bodyId}">
         ${list.slice().reverse().map(s => `
           <div style="display:flex;align-items:center;gap:12px;padding:10px 0 10px 24px;border-bottom:1px solid rgba(255,255,255,0.04);">
             <div style="width:8px;height:8px;border-radius:50%;background:var(--accent-1);flex-shrink:0;margin-right:4px;"></div>
@@ -6381,7 +6572,9 @@ function renderSnapshots(el, snaps) {
                 <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteSnapshot('${esc(s.name)}')">Delete</button>
               </div>` : ''}
           </div>`).join('')}
-      </div>`).join('');
+        </div>
+      </div>`;
+    }).join('');
 
     if (!multiPool) return body;
     return `
@@ -6487,9 +6680,12 @@ async function confirmDeleteSnapshot() {
   }
 }
 
+let _dsdCurrentName = '';
+
 function openDatasetDetail(name) {
   const d = (datasetData || []).find(x => x.name === name) || (datasetCache || []).find(x => x.name === name);
   if (!d) return;
+  _dsdCurrentName = name;
 
   // Title: short name, full path below.
   document.getElementById('dsd-title').textContent = d.short_name || d.name;
@@ -6540,6 +6736,28 @@ function openDatasetDetail(name) {
 
 function closeDatasetDetail() {
   document.getElementById('modal-dataset-detail').classList.add('hidden');
+}
+
+function openDatasetTrending() {
+  const dsName = _dsdCurrentName;
+  closeDatasetDetail();
+  showPage('capacity');
+  switchCapTab('trending');
+  capSelectOnlyDataset(dsName);
+}
+
+async function openDatasetTreeMap() {
+  const dsName = _dsdCurrentName;
+  closeDatasetDetail();
+  showPage('capacity');
+  const parts    = dsName.split('/');
+  const pool     = parts[0];
+  const segments = parts.slice(1); // sub-path within the pool root
+  switchCapTab('tree');
+  await capTreeSelectDataset(pool);
+  if (segments.length > 0) {
+    capTreeDrillToSegments(segments);
+  }
 }
 
 // ===== Disks =====
@@ -6967,6 +7185,7 @@ async function openCreateShare() {
   shareEditName = null;
   document.getElementById('share-modal-title').textContent = 'New Share';
   document.getElementById('share-submit-btn').textContent = 'Create Share';
+  document.getElementById('share-submit-btn').disabled = false;
   document.getElementById('share-name').value = '';
   document.getElementById('share-name').disabled = false;
   document.getElementById('share-path').value = '';
@@ -7787,6 +8006,7 @@ function _ioChartOptions(yLabel) {
     maintainAspectRatio: false,
     animation: false,
     interaction: { mode: 'index', intersect: false },
+    layout: { padding: { top: 24, right: 16, left: 4, bottom: 4 } },
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -8041,21 +8261,28 @@ function _dashBuild24h(seriesArr) {
 }
 
 function _dashChartOpts(yLabel, yMax, stacked = false) {
-  const tickColor = '#8e8e93';
-  const gridColor = 'rgba(255,255,255,0.07)';
+  const style     = getComputedStyle(document.body);
+  const isLight   = document.body.classList.contains('light');
+  const tickColor = style.getPropertyValue('--text-3').trim() || (isLight ? '#6c6c70' : '#8e8e93');
+  const tipBg     = isLight ? '#ffffff' : '#1c1c1e';
+  const tipBorder = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.15)';
+  const tipTitle  = style.getPropertyValue('--text-2').trim() || (isLight ? '#3a3a3c' : '#c7c7cc');
+  const tipBody   = style.getPropertyValue('--text').trim()   || (isLight ? '#1c1c1e' : '#f5f5f7');
+  const gridColor = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)';
   return {
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
     interaction: { mode: 'index', intersect: false },
+    layout: { padding: { top: 24, right: 16, left: 4, bottom: 4 } },
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#1c1c1e',
-        borderColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: tipBg,
+        borderColor: tipBorder,
         borderWidth: 1,
-        titleColor: '#c7c7cc',
-        bodyColor: '#f5f5f7',
+        titleColor: tipTitle,
+        bodyColor: tipBody,
         padding: 10,
         callbacks: {
           title: items => items[0]?.label ?? '',
@@ -8654,19 +8881,34 @@ async function loadKeyMgmtSettings() {
       return;
     }
     el.innerHTML = `<table style="width:100%;"><thead><tr>
-      <th>Name</th><th>Created</th><th>Used By</th><th></th>
+      <th>Name</th><th>Created</th><th>Used By</th><th style="width:32px;"></th>
     </tr></thead><tbody>` +
     keys.map(k => {
       const users = usage[k.id] || [];
       const inUse = users.length > 0;
+      const menuId = 'kmenu-' + k.id.replace(/[^a-zA-Z0-9]/g, '_');
       return `<tr>
         <td style="font-weight:600;">${esc(k.name)}</td>
         <td style="font-size:12px;color:var(--text-3);">${new Date(k.created_at).toLocaleDateString()}</td>
         <td style="font-size:12px;">${inUse ? users.map(u=>`<span style="font-family:monospace;background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:11px;">${esc(u)}</span>`).join(' ') : '<span style="color:var(--text-3);">(unused)</span>'}</td>
-        <td style="white-space:nowrap;">
-          <button class="btn btn-ghost btn-sm" onclick="exportKey('${esc(k.id)}','${esc(k.name)}')">Export</button>
-          <button class="btn btn-ghost btn-sm" onclick="deleteKeySettings('${esc(k.id)}')" ${inUse?'disabled title="In use"':''}
-            style="${inUse?'opacity:.4;cursor:not-allowed;':'color:var(--accent-danger);'}">Delete</button>
+        <td style="position:relative;text-align:right;">
+          <button onclick="toggleKeyMenu('${menuId}',event)"
+                  style="background:none;border:none;cursor:pointer;color:var(--text-2);font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;"
+                  title="Actions">⋮</button>
+          <div id="${menuId}" style="display:none;position:absolute;right:0;top:100%;z-index:200;
+               background:var(--surface);border:1px solid var(--border);border-radius:8px;
+               box-shadow:var(--shadow);min-width:130px;overflow:hidden;">
+            <button onclick="exportKey('${esc(k.id)}','${esc(k.name)}');closeKeyMenus()"
+                    style="display:block;width:100%;text-align:left;padding:8px 14px;background:none;border:none;
+                           cursor:pointer;font-size:13px;color:var(--text-1);"
+                    onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">Export</button>
+            <button onclick="${inUse ? '' : `deleteKeySettings('${esc(k.id)}');closeKeyMenus()`}"
+                    ${inUse ? 'disabled title="In use by a pool or dataset"' : ''}
+                    style="display:block;width:100%;text-align:left;padding:8px 14px;background:none;border:none;
+                           cursor:${inUse ? 'not-allowed' : 'pointer'};font-size:13px;
+                           color:${inUse ? 'var(--text-3)' : 'var(--accent-danger)'};opacity:${inUse ? '.45' : '1'};"
+                    ${inUse ? '' : 'onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'none\'"'}>Delete</button>
+          </div>
         </td>
       </tr>`;
     }).join('') + '</tbody></table>';
@@ -8674,6 +8916,20 @@ async function loadKeyMgmtSettings() {
     el.innerHTML = '<div style="color:var(--accent-danger);font-size:13px;">Failed to load keys.</div>';
   }
 }
+function closeKeyMenus() {
+  document.querySelectorAll('[id^="kmenu-"]').forEach(m => m.style.display = 'none');
+}
+function toggleKeyMenu(menuId, e) {
+  e.stopPropagation();
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
+  const wasOpen = menu.style.display !== 'none';
+  closeKeyMenus();
+  if (!wasOpen) menu.style.display = 'block';
+}
+// Close menus when clicking anywhere outside
+document.addEventListener('click', closeKeyMenus);
+
 async function deleteKeySettings(id) {
   const resp = await fetch('/api/encryption/keys/' + encodeURIComponent(id), { method: 'DELETE' });
   const data = await resp.json();
@@ -8833,6 +9089,934 @@ const _origSubmitEditUser = typeof submitEditUser === 'function' ? submitEditUse
 
 // ── Login TOTP step ───────────────────────────────────────────────────────────
 // (handled in login.html — index.html has no login form)
+
+// ===== Capacity Trend =====
+(function() {
+  const CAP_COLORS = [
+    '#0a84ff','#32d74b','#ff9f0a','#bf5af2',
+    '#64d2ff','#ffd60a','#30d158','#ff6961',
+    '#b4b4b4','#5ac8fa'
+  ];
+
+  const CAP_LS_KEYS  = 'cap_selected_keys';
+  const CAP_LS_RANGE = 'cap_selected_range';
+  const CAP_LS_AGG   = 'cap_selected_agg';
+
+  function capSavePrefs() {
+    try {
+      localStorage.setItem(CAP_LS_KEYS,  JSON.stringify(capSelectedKeys));
+      localStorage.setItem(CAP_LS_RANGE, capCurrentRange);
+      localStorage.setItem(CAP_LS_AGG,   capCurrentAgg);
+    } catch(e) {}
+  }
+
+  function capLoadPrefs() {
+    try {
+      const k = localStorage.getItem(CAP_LS_KEYS);
+      // Strip any legacy pool:* keys — only ds:* keys are shown in the trend chart.
+      if (k) capSelectedKeys = JSON.parse(k).filter(key => key.startsWith('ds:') && !_capIsRootDs(key.split(':')[1]));
+      const r = localStorage.getItem(CAP_LS_RANGE);
+      if (r) capCurrentRange = r;
+      const a = localStorage.getItem(CAP_LS_AGG);
+      if (a && ['avg','min','max'].includes(a)) capCurrentAgg = a;
+    } catch(e) {}
+  }
+
+  // Root datasets share the pool name and have no '/' — exclude them from graphs.
+  function _capIsRootDs(name) { return name.indexOf('/') < 0; }
+
+  let capMeta         = { pools: [], datasets: [] };
+  let capSelectedKeys = [];
+  let capCurrentRange = 'all';
+  let capCurrentAgg   = 'avg';
+  let capChartInst  = null;
+  let capOldestTs   = 0;
+  let capSelectorOpen = false;
+
+  window.loadCapacityPage = async function() {
+    closeCapSelector();
+    // Restore persisted prefs before fetching meta (so checkboxes render correctly).
+    capLoadPrefs();
+    // Sync range buttons and agg select to restored prefs.
+    document.querySelectorAll('.cap-range-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.range === capCurrentRange);
+    });
+    const aggSel = document.getElementById('cap-agg-select');
+    if (aggSel) aggSel.value = capCurrentAgg;
+    try {
+      const resp = await fetch('/api/capacity/series');
+      if (!resp.ok) { showCapNoData(); return; }
+      capMeta = await resp.json();
+      buildCapSelectorPanel(capMeta);
+      // Default (no saved prefs): select all datasets >= 100 MB.
+      if (capSelectedKeys.length === 0) {
+        const MIN_BYTES = 100 * 1024 * 1024;
+        capSelectedKeys = capMeta.datasets
+          .filter(d => (d.used || 0) >= MIN_BYTES && !_capIsRootDs(d.name))
+          .map(d => 'ds:' + d.name + ':used');
+        updateCapSelectorLabel();
+        capSavePrefs();
+        buildCapTree(capMeta);
+      }
+    } catch(e) { showCapNoData(); return; }
+
+    try {
+      const or = await fetch('/api/capacity/oldest');
+      if (or.ok) { const od = await or.json(); capOldestTs = od.oldest_ts || 0; }
+    } catch(e) {}
+
+    await renderCapChart();
+  };
+
+  function showCapNoData() {
+    const card = document.getElementById('cap-chart-card');
+    const noData = document.getElementById('cap-no-data');
+    if (card)   card.classList.add('hidden');
+    if (noData) noData.classList.remove('hidden');
+  }
+
+  function hideCapNoData() {
+    const card = document.getElementById('cap-chart-card');
+    const noData = document.getElementById('cap-no-data');
+    if (card)   card.classList.remove('hidden');
+    if (noData) noData.classList.add('hidden');
+  }
+
+  window.toggleCapSelector = function() {
+    capSelectorOpen = !capSelectorOpen;
+    const panel = document.getElementById('cap-selector-panel');
+    if (panel) panel.classList.toggle('hidden', !capSelectorOpen);
+  };
+
+  function closeCapSelector() {
+    capSelectorOpen = false;
+    const panel = document.getElementById('cap-selector-panel');
+    if (panel) panel.classList.add('hidden');
+  }
+
+  // Close panel when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!capSelectorOpen) return;
+    const btn   = document.getElementById('cap-selector-btn');
+    const panel = document.getElementById('cap-selector-panel');
+    if (btn && panel && !btn.contains(e.target) && !panel.contains(e.target)) {
+      closeCapSelector();
+    }
+  }, true);
+
+  function buildCapSelectorPanel(meta) {
+    buildCapTree(meta);
+  }
+
+  function buildCapTree(meta) {
+    const tree = document.getElementById('cap-tree');
+    if (!tree) return;
+    tree.innerHTML = '';
+    for (const p of meta.pools) {
+      const poolDs = meta.datasets.filter(d => d.pool === p.name && !_capIsRootDs(d.name));
+      const dsKeys = poolDs.map(d => 'ds:' + d.name + ':used');
+      const checkedCount = dsKeys.filter(k => capSelectedKeys.includes(k)).length;
+
+      const MIN_BYTES = 100 * 1024 * 1024; // 100 MB
+
+      // --- Pool header row (acts as "select all children" toggle) ---
+      const poolRow = document.createElement('div');
+      poolRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer;' +
+                              'border-radius:6px;font-size:13px;font-weight:700;color:var(--text);' +
+                              'user-select:none;';
+      poolRow.onmouseover = function() { poolRow.style.background = 'var(--surface-2)'; };
+      poolRow.onmouseout  = function() { poolRow.style.background = ''; };
+
+      const poolCb = document.createElement('input');
+      poolCb.type = 'checkbox';
+      poolCb.style.flexShrink = '0';
+      poolCb.checked = checkedCount === dsKeys.length && dsKeys.length > 0;
+      poolCb.indeterminate = checkedCount > 0 && checkedCount < dsKeys.length;
+      poolCb.dataset.poolGroup = p.name;
+
+      poolCb.onchange = function(e) {
+        e.stopPropagation();
+        const checked = poolCb.checked;
+        capSelectedKeys = capSelectedKeys.filter(k => !dsKeys.includes(k));
+        if (checked) capSelectedKeys.push(...dsKeys);
+        tree.querySelectorAll('[data-pool-parent="' + p.name + '"]').forEach(cb => { cb.checked = checked; });
+        updateCapSelectorLabel();
+      };
+
+      poolRow.onclick = function(e) {
+        if (e.target === poolCb) return;
+        poolCb.checked = !poolCb.checked;
+        poolCb.indeterminate = false;
+        poolCb.dispatchEvent(new Event('change'));
+      };
+
+      const poolLabel = document.createElement('span');
+      poolLabel.textContent = '🗄 ' + p.name;
+      poolLabel.style.cssText = 'flex:1;';
+
+      const poolUsed = document.createElement('span');
+      poolUsed.textContent = fmtBytes(p.used || 0);
+      poolUsed.style.cssText = 'font-size:11px;color:var(--text-3);font-weight:400;white-space:nowrap;';
+
+      poolRow.appendChild(poolCb);
+      poolRow.appendChild(poolLabel);
+      poolRow.appendChild(poolUsed);
+      tree.appendChild(poolRow);
+
+      // --- Dataset child rows ---
+      for (const d of poolDs) {
+        const key = 'ds:' + d.name + ':used';
+        const relPath = d.name.indexOf('/') >= 0 ? d.name.substring(d.name.indexOf('/') + 1) : d.name;
+        const isTiny = (d.used || 0) < MIN_BYTES;
+
+        const dsRow = document.createElement('label');
+        dsRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 4px 4px 28px;' +
+                              'cursor:pointer;font-size:13px;border-radius:6px;' +
+                              (isTiny ? 'color:var(--text-3);opacity:0.55;' : 'color:var(--text-2);');
+        dsRow.onmouseover = function() { dsRow.style.background = 'var(--surface-2)'; };
+        dsRow.onmouseout  = function() { dsRow.style.background = ''; };
+
+        const dsCb = document.createElement('input');
+        dsCb.type = 'checkbox';
+        dsCb.dataset.key = key;
+        dsCb.dataset.poolParent = p.name;
+        dsCb.checked = capSelectedKeys.includes(key);
+        dsCb.style.flexShrink = '0';
+
+        dsCb.onchange = function() {
+          const siblings = Array.from(tree.querySelectorAll('[data-pool-parent="' + p.name + '"]'));
+          const n = siblings.filter(c => c.checked).length;
+          poolCb.checked = n === siblings.length;
+          poolCb.indeterminate = n > 0 && n < siblings.length;
+        };
+
+        const dsLabel = document.createElement('span');
+        dsLabel.innerHTML = '<span style="color:var(--border);margin-right:4px;">├─</span>' + relPath;
+        dsLabel.style.cssText = 'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+
+        const dsUsed = document.createElement('span');
+        dsUsed.textContent = fmtBytes(d.used || 0);
+        dsUsed.style.cssText = 'font-size:11px;color:var(--text-3);white-space:nowrap;';
+
+        dsRow.appendChild(dsCb);
+        dsRow.appendChild(dsLabel);
+        dsRow.appendChild(dsUsed);
+        tree.appendChild(dsRow);
+      }
+
+      // Add a small spacer between pools.
+      if (meta.pools.indexOf(p) < meta.pools.length - 1) {
+        const sep = document.createElement('div');
+        sep.style.cssText = 'height:6px;';
+        tree.appendChild(sep);
+      }
+    }
+  }
+
+  // Select exactly one dataset and set range to 'all', then render.
+  window.capSelectOnlyDataset = function(dsName) {
+    capSelectedKeys = ['ds:' + dsName + ':used'];
+    capCurrentRange = 'all';
+    document.querySelectorAll('.cap-range-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.range === 'all');
+    });
+    buildCapTree(capMeta);
+    updateCapSelectorLabel();
+    capSavePrefs();
+    renderCapChart();
+  };
+
+  window.capSelectAll = function() {
+    const MIN_BYTES = 100 * 1024 * 1024;
+    capSelectedKeys = capMeta.datasets
+      .filter(d => (d.used || 0) >= MIN_BYTES && !_capIsRootDs(d.name))
+      .map(d => 'ds:' + d.name + ':used');
+    buildCapTree(capMeta);
+    updateCapSelectorLabel();
+    capSavePrefs();
+  };
+
+  window.capDeselectAll = function() {
+    capSelectedKeys = [];
+    buildCapTree(capMeta);
+    updateCapSelectorLabel();
+    capSavePrefs();
+  };
+
+  window.applyCapSelection = function() {
+    // Only collect dataset checkboxes (pool-group checkboxes have no data-key).
+    const cbs = document.querySelectorAll('#cap-tree input[data-key]');
+    capSelectedKeys = [];
+    cbs.forEach(cb => { if (cb.checked) capSelectedKeys.push(cb.dataset.key); });
+    updateCapSelectorLabel();
+    capSavePrefs();
+    renderCapChart();
+  };
+
+  function updateCapSelectorLabel() {
+    const ds = capSelectedKeys.filter(k => k.startsWith('ds:')).length;
+    const label = ds === 0 ? 'Select datasets…'
+                           : ds + ' dataset' + (ds > 1 ? 's' : '') + ' selected';
+    const el = document.getElementById('cap-selector-label');
+    if (el) el.textContent = label;
+  }
+
+  window.setCapRange = function(range) {
+    capCurrentRange = range;
+    document.querySelectorAll('.cap-range-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.range === range);
+    });
+    capSavePrefs();
+    renderCapChart();
+  };
+
+  window.setCapAgg = function(agg) {
+    capCurrentAgg = agg;
+    capSavePrefs();
+    renderCapChart();
+  };
+
+  window.switchCapTab = function(tab) {
+    document.querySelectorAll('.cap-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    // Show/hide tab panels (pattern: id="cap-tab-<name>")
+    ['trending', 'tree'].forEach(name => {
+      const el = document.getElementById('cap-tab-' + name);
+      if (el) el.classList.toggle('hidden', name !== tab);
+    });
+    // Scroll the pages container back to top so the tab header is visible.
+    const pc = document.querySelector('.pages-container');
+    if (pc) pc.scrollTop = 0;
+    if (tab === 'tree') capTreeOnSwitch();
+  };
+
+  function capTierForRange(range) {
+    if (range === 'day' || range === 'week') return 0;
+    if (range === 'month') return 1;
+    if (range === 'year')  return 2;
+    // 'all': pick tier based on data age
+    if (capOldestTs === 0) return 0;
+    const ageSecs = Math.floor(Date.now() / 1000) - capOldestTs;
+    if (ageSecs > 30 * 86400) return 2;
+    if (ageSecs > 7  * 86400) return 1;
+    return 0;
+  }
+
+  function capSinceTs(range) {
+    const now = Math.floor(Date.now() / 1000);
+    const map = { day: 86400, week: 604800, month: 2592000, year: 31536000 };
+    return map[range] ? now - map[range] : 0;
+  }
+
+  // Sum multiple series at aligned timestamps; returns [{x: ms, y: sum}]
+  // agg: 'avg' | 'min' | 'max'
+  function capSumSeries(keys, seriesMap, agg) {
+    const map = new Map();
+    for (const k of keys) {
+      for (const s of (seriesMap[k] || [])) {
+        const ms = s.ts * 1000;
+        map.set(ms, (map.get(ms) || 0) + (s[agg] || 0));
+      }
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([x, y]) => ({ x, y }));
+  }
+
+  // Median of an array
+  function median(arr) {
+    if (!arr.length) return 0;
+    const sorted = arr.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  window.renderCapChart = async function() {
+    if (capSelectedKeys.length === 0) { showCapNoData(); return; }
+
+    const tier  = capTierForRange(capCurrentRange);
+    const since = capSinceTs(capCurrentRange);
+    const agg   = capCurrentAgg; // 'avg' | 'min' | 'max'
+
+    // Also need pool:*:usable for the ceiling line.
+    // Collect the set of pool names referenced by selected keys.
+    const selectedPools = new Set();
+    for (const k of capSelectedKeys) {
+      if (k.startsWith('pool:')) {
+        selectedPools.add(k.split(':')[1]);
+      } else if (k.startsWith('ds:')) {
+        const dsName = k.replace(/^ds:/, '').replace(/:used$/, '');
+        const poolName = dsName.indexOf('/') >= 0 ? dsName.substring(0, dsName.indexOf('/')) : dsName;
+        selectedPools.add(poolName);
+      }
+    }
+    const usableKeys = Array.from(selectedPools).map(p => 'pool:' + p + ':usable');
+    const allKeys = [...new Set([...capSelectedKeys, ...usableKeys])];
+
+    let data;
+    try {
+      const params = new URLSearchParams({ keys: allKeys.join(','), tier: String(tier) });
+      if (since > 0) params.set('since', String(since));
+      const resp = await fetch('/api/capacity/data?' + params);
+      if (!resp.ok) { showCapNoData(); return; }
+      data = await resp.json();
+    } catch(e) { showCapNoData(); return; }
+
+    const seriesMap = data.series || {};
+    const hasData = Object.values(seriesMap).some(arr => arr && arr.length > 0);
+    if (!hasData) { showCapNoData(); return; }
+    hideCapNoData();
+
+    const chartDatasets = [];
+    let colorIdx = 0;
+
+    const poolKeys = capSelectedKeys.filter(k => k.startsWith('pool:'));
+    const MIN_BYTES = 100 * 1024 * 1024; // 100 MB
+    const dsKeys = capSelectedKeys.filter(k => {
+      if (!k.startsWith('ds:')) return false;
+      const dsName = k.split(':')[1];
+      if (_capIsRootDs(dsName)) return false;
+      const samples = seriesMap[k] || [];
+      if (!samples.length) return false;
+      return Math.max(...samples.map(s => s.avg)) >= MIN_BYTES;
+    });
+
+    // ">6 datasets" aggregation: keep top 5 by median usage, rest → "Other"
+    let finalDsKeys = dsKeys;
+    let otherKeys   = [];
+    if (dsKeys.length > 6) {
+      const ranked = dsKeys.map(k => {
+        const avgs = (seriesMap[k] || []).map(s => s.avg);
+        return { k, med: median(avgs) };
+      }).sort((a, b) => b.med - a.med);
+      finalDsKeys = ranked.slice(0, 5).map(m => m.k);
+      otherKeys   = ranked.slice(5).map(m => m.k);
+    }
+
+    const textColor2 = getComputedStyle(document.body).getPropertyValue('--text-2').trim() || '#aaa';
+    const textColor3 = getComputedStyle(document.body).getPropertyValue('--text-3').trim() || '#666';
+    const gridColor  = 'rgba(128,128,128,0.1)';
+
+    // Individual dataset curves (stacked) — pools are excluded from the stack
+    for (const k of finalDsKeys) {
+      const dsName = k.replace(/^ds:/, '').replace(/:used$/, '');
+      const color = CAP_COLORS[colorIdx++ % CAP_COLORS.length];
+      chartDatasets.push({
+        label: dsName,
+        data:  (seriesMap[k] || []).map(s => ({ x: s.ts * 1000, y: s[agg] })),
+        borderColor: color,
+        backgroundColor: color + '55',
+        fill: true,
+        tension: 0.2,
+        pointRadius: 0,
+        stack: 'used',
+        borderWidth: 1.5,
+      });
+    }
+
+    // "Other" aggregate
+    if (otherKeys.length > 0) {
+      const merged = capSumSeries(otherKeys, seriesMap, agg);
+      chartDatasets.push({
+        label: 'Other (' + otherKeys.length + ' datasets)',
+        data:  merged,
+        borderColor: '#888',
+        backgroundColor: '#88888844',
+        fill: true,
+        tension: 0.2,
+        pointRadius: 0,
+        stack: 'used',
+        borderWidth: 1.5,
+      });
+    }
+
+    // Dashed red usable ceiling line (NOT stacked)
+    if (usableKeys.length > 0) {
+      let ceilData;
+      if (usableKeys.length === 1) {
+        ceilData = (seriesMap[usableKeys[0]] || []).map(s => ({ x: s.ts * 1000, y: s[agg] }));
+      } else {
+        ceilData = capSumSeries(usableKeys, seriesMap, agg);
+      }
+      if (ceilData.length > 0) {
+        chartDatasets.push({
+          label: 'Usable Capacity' + (selectedPools.size > 1 ? ' (total)' : ''),
+          data:  ceilData,
+          borderColor: '#ff453a',
+          borderDash: [6, 3],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0,
+          pointRadius: 0,
+          borderWidth: 2,
+          // Don't stack this series
+        });
+      }
+    }
+
+    if (capChartInst) { capChartInst.destroy(); capChartInst = null; }
+
+    const canvas = document.getElementById('cap-chart');
+    if (!canvas) return;
+    // Size canvas to fill available vertical space (same approach as treemap SVG).
+    const card    = document.getElementById('cap-chart-card');
+    const cardTop = card.getBoundingClientRect().top;
+    const actBar  = document.querySelector('.activity-bar');
+    const actBarH = actBar ? actBar.offsetHeight : 0;
+    canvas.style.height = Math.max(300, Math.floor(window.innerHeight - cardTop - actBarH - 32 - 16)) + 'px';
+    const ctx = canvas.getContext('2d');
+
+    // Explicit X-axis bounds so the displayed range always matches the selection.
+    const xMax = Date.now();
+    const xMin = since > 0 ? since * 1000
+               : capOldestTs > 0 ? capOldestTs * 1000
+               : xMax - 7 * 24 * 3600 * 1000; // fallback: last week
+
+    // Tick format: show time component only when range is ≤ 1 week.
+    const showTime = (capCurrentRange === 'day' || capCurrentRange === 'week');
+    const tickFmt = showTime
+      ? function(val) {
+          const d = new Date(val);
+          return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+               + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      : function(val) {
+          return new Date(val).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        };
+
+    capChartInst = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: chartDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            type: 'linear',
+            min: xMin,
+            max: xMax,
+            ticks: {
+              maxTicksLimit: 8,
+              color: textColor3,
+              callback: tickFmt
+            },
+            grid: { color: gridColor }
+          },
+          y: {
+            stacked: true,
+            min: 0,
+            ticks: {
+              color: textColor3,
+              callback: v => fmtBytes(v)
+            },
+            grid: { color: gridColor }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: textColor2, boxWidth: 12, padding: 16 }
+          },
+          tooltip: {
+            callbacks: {
+              title: items => {
+                if (!items.length) return '';
+                const d = new Date(items[0].parsed.x);
+                const pad = n => String(n).padStart(2, '0');
+                const h24 = d.getHours();
+                const ampm = h24 >= 12 ? 'pm' : 'am';
+                const h12 = h24 % 12 || 12;
+                return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+                     + ' ' + pad(h12) + ':' + pad(d.getMinutes()) + ' ' + ampm;
+              },
+              label: ctx => ' ' + ctx.dataset.label + ': ' + fmtBytes(ctx.parsed.y)
+            }
+          }
+        }
+      }
+    });
+  };
+  // ===== Dataset Tree Usage tab =====
+  const CAP_LS_TREE_DS = 'cap_tree_ds'; // persisted selected dataset
+
+  let capTreeDrillStack    = []; // [{entry, name}, …] drill-down history
+  let capTreeCurrentDs     = ''; // selected dataset name
+  let capTreeCurrentData   = null; // DatasetFolderUsage from API
+  let capTreePollTimer     = null;
+  let capTreeScanStartedAt = 0;
+
+  function _capTreeSetScanTime(ts) {
+    const el = document.getElementById('cap-tree-scan-time');
+    if (!el) return;
+    if (!ts) { el.querySelector('.cap-scan-long').textContent = ''; el.querySelector('.cap-scan-short').textContent = ''; return; }
+    const d = new Date(ts * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    const dateOnly = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+    el.querySelector('.cap-scan-long').textContent  = 'Last scan: ' + d.toLocaleString();
+    el.querySelector('.cap-scan-short').textContent = dateOnly;
+  }
+
+  function capTreeOnSwitch() {
+    capTreePopulateSelect(capMeta);
+    if (!capTreeCurrentDs) {
+      // Restore persisted selection, or default to the first pool.
+      const saved = localStorage.getItem(CAP_LS_TREE_DS) || (capMeta.pools[0] && capMeta.pools[0].name) || '';
+      if (saved) {
+        const sel = document.getElementById('cap-tree-ds-select');
+        if (sel) sel.value = saved;
+        capTreeSelectDataset(saved);
+        return;
+      }
+    }
+    if (!capTreeCurrentData) {
+      _capTreeShowState('nodata');
+    }
+  }
+
+  function capTreePopulateSelect(meta) {
+    const sel = document.getElementById('cap-tree-ds-select');
+    if (!sel) return;
+    const prev = sel.value || capTreeCurrentDs;
+    sel.innerHTML = '<option value="">— choose a pool —</option>';
+    for (const p of meta.pools) {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    }
+    if (prev) sel.value = prev;
+  }
+
+  window.capTreeSelectDataset = async function(dataset) {
+    capTreeCurrentDs   = dataset;
+    try { localStorage.setItem(CAP_LS_TREE_DS, dataset || ''); } catch(e) {}
+    capTreeDrillStack  = [];
+    capTreeCurrentData = null;
+    document.getElementById('cap-tree-back-btn').classList.add('hidden');
+    document.getElementById('cap-tree-breadcrumb').textContent = '';
+    _capTreeSetScanTime(0);
+    if (!dataset) { _capTreeShowState('nodata'); return; }
+    try {
+      const resp = await fetch('/api/capacity/folder-usage?dataset=' + encodeURIComponent(dataset));
+      if (resp.status === 404 || !resp.ok) {
+        _capTreeShowState('nodata', {
+          title: 'No scan data for ' + dataset,
+          body:  'Click <strong>↻ ReScan</strong> above to run a background scan of this pool.'
+        });
+        return;
+      }
+      capTreeCurrentData = await resp.json();
+      _capTreeSetScanTime(capTreeCurrentData.scanned_at);
+      _capTreeShowState('chart');
+      requestAnimationFrame(() => _capTreeRenderNode(capTreeCurrentData.root));
+    } catch(e) { _capTreeShowState('nodata'); }
+  };
+
+  window.capTreeRefresh = async function() {
+    if (!capTreeCurrentDs) { alert('Select a dataset first.'); return; }
+    // Stop any ongoing poll.
+    if (capTreePollTimer) { clearInterval(capTreePollTimer); capTreePollTimer = null; }
+    capTreeScanStartedAt = capTreeCurrentData ? capTreeCurrentData.scanned_at : 0;
+    _capTreeShowState('scanning');
+    try {
+      const resp = await fetch(
+        '/api/capacity/folder-usage/refresh?dataset=' + encodeURIComponent(capTreeCurrentDs),
+        { method: 'POST' }
+      );
+      if (!resp.ok) { _capTreeShowState('nodata'); return; }
+    } catch(e) { _capTreeShowState('nodata'); return; }
+    // Poll every 3 s until the stored scanned_at advances.
+    let waited = 0;
+    capTreePollTimer = setInterval(async () => {
+      waited += 3;
+      if (waited > 300) {
+        clearInterval(capTreePollTimer); capTreePollTimer = null;
+        _capTreeShowState('nodata'); return;
+      }
+      try {
+        const resp = await fetch('/api/capacity/folder-usage?dataset=' + encodeURIComponent(capTreeCurrentDs));
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.scanned_at > capTreeScanStartedAt) {
+          clearInterval(capTreePollTimer); capTreePollTimer = null;
+          capTreeCurrentData = data;
+          capTreeDrillStack  = [];
+          document.getElementById('cap-tree-back-btn').classList.add('hidden');
+          document.getElementById('cap-tree-breadcrumb').textContent = '';
+          _capTreeSetScanTime(data.scanned_at);
+          _capTreeShowState('chart');
+          requestAnimationFrame(() => _capTreeRenderNode(data.root));
+        }
+      } catch(e) {}
+    }, 3000);
+  };
+
+  // Drill down from the loaded root through the given path segments (folder names).
+  // Called after capTreeSelectDataset resolves for a specific sub-path.
+  window.capTreeDrillToSegments = function(segments) {
+    if (!capTreeCurrentData || !segments || segments.length === 0) return;
+    capTreeDrillStack = [];
+    let node = capTreeCurrentData.root;
+    for (const seg of segments) {
+      if (!node.children) break;
+      const child = node.children.find(c => c.name === seg);
+      if (!child) break;
+      capTreeDrillStack.push(child);
+      node = child;
+    }
+    document.getElementById('cap-tree-back-btn').classList.toggle('hidden', capTreeDrillStack.length === 0);
+    _capTreeUpdateBreadcrumb();
+    requestAnimationFrame(() => _capTreeRenderNode(capTreeDrillStack.length > 0
+      ? capTreeDrillStack[capTreeDrillStack.length - 1]
+      : capTreeCurrentData.root));
+  };
+
+  window.capTreeBack = function() {
+    if (capTreeDrillStack.length === 0) return;
+    capTreeDrillStack.pop();
+    document.getElementById('cap-tree-back-btn').classList.toggle('hidden', capTreeDrillStack.length === 0);
+    const node = capTreeDrillStack.length === 0
+      ? capTreeCurrentData.root
+      : capTreeDrillStack[capTreeDrillStack.length - 1];
+    _capTreeRenderNode(node);
+    _capTreeUpdateBreadcrumb();
+  };
+
+  function _capTreeShowState(state, msg) {
+    document.getElementById('cap-tree-no-data').classList.toggle('hidden',  state !== 'nodata');
+    document.getElementById('cap-tree-scanning').classList.toggle('hidden', state !== 'scanning');
+    document.getElementById('cap-tree-card').classList.toggle('hidden',     state !== 'chart');
+    if (state === 'nodata') {
+      const title = document.getElementById('cap-tree-no-data-title');
+      const para  = document.getElementById('cap-tree-no-data-msg');
+      if (msg) {
+        if (title) title.textContent = msg.title || 'No scan data yet';
+        if (para)  para.innerHTML   = msg.body  || '';
+      } else {
+        if (title) title.textContent = 'No scan data yet';
+        if (para)  para.innerHTML   = 'Select a dataset above, then click <strong>↻ Refresh Folder Usage</strong> to start a background scan.';
+      }
+    }
+  }
+
+  function _capTreeUpdateBreadcrumb() {
+    const bc = document.getElementById('cap-tree-breadcrumb');
+    if (!bc) return;
+    if (capTreeDrillStack.length === 0) { bc.innerHTML = ''; return; }
+
+    // Build clickable segments. Index 0 = dataset root, 1..n = drill-down folders.
+    const parts = [capTreeCurrentDs, ...capTreeDrillStack.map(e => e.name)];
+    const linkStyle = 'color:var(--accent-2);cursor:pointer;text-decoration:underline;text-underline-offset:2px;';
+    const sepStyle  = 'color:var(--text-3);margin:0 4px;';
+
+    bc.innerHTML = parts.map((name, i) => {
+      const isLast = i === parts.length - 1;
+      if (isLast) {
+        // Current level — not a link, just plain text
+        return '<span style="color:var(--text-2);font-weight:600;">' + name + '</span>';
+      }
+      return '<span style="' + linkStyle + '" data-bc-idx="' + i + '">' + name + '</span>';
+    }).join('<span style="' + sepStyle + '"> › </span>');
+
+    // Attach click handlers to ancestor segments.
+    bc.querySelectorAll('[data-bc-idx]').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.bcIdx, 10);
+        if (idx === 0) {
+          // Jump to dataset root.
+          capTreeDrillStack = [];
+          document.getElementById('cap-tree-back-btn').classList.add('hidden');
+          _capTreeUpdateBreadcrumb();
+          _capTreeRenderNode(capTreeCurrentData.root);
+        } else {
+          // Jump to ancestor at depth idx (keep stack[0..idx-1]).
+          capTreeDrillStack = capTreeDrillStack.slice(0, idx);
+          document.getElementById('cap-tree-back-btn').classList.remove('hidden');
+          _capTreeUpdateBreadcrumb();
+          _capTreeRenderNode(capTreeDrillStack[capTreeDrillStack.length - 1]);
+        }
+      });
+    });
+  }
+
+  function _capTreeRenderNode(entry) {
+    const svg = document.getElementById('cap-tree-svg');
+    if (!svg) return;
+    const card = svg.parentElement;
+    const W = card.clientWidth || 800;
+    // Fit height to the remaining vertical space in the viewport.
+    const cardTop  = card.getBoundingClientRect().top;
+    const actBar   = document.querySelector('.activity-bar');
+    const actBarH  = actBar ? actBar.offsetHeight : 0;
+    const H = Math.max(300, Math.floor(window.innerHeight - cardTop - actBarH - 28));
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('height', H);
+    svg.innerHTML = '';
+
+    const children = (entry.children || []).slice().sort((a, b) => b.size_bytes - a.size_bytes);
+    const top30 = children.slice(0, 30);
+    const total = top30.reduce((s, c) => s + c.size_bytes, 0) || 1;
+    const rects = _squarify(top30.map(c => c.size_bytes), { x: 0, y: 0, w: W, h: H });
+
+    const palette = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2',
+                     '#9333ea','#be123c','#b45309','#0d9488','#4338ca','#c026d3'];
+
+    rects.forEach((r, i) => {
+      const child = top30[i];
+      if (!child) return;
+      const pct   = (child.size_bytes / total * 100).toFixed(1);
+      const color = palette[i % palette.length];
+      const hasDrill = child.children && child.children.length > 0;
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.style.cursor = hasDrill ? 'pointer' : 'default';
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x',      r.x + 1);
+      rect.setAttribute('y',      r.y + 1);
+      rect.setAttribute('width',  Math.max(0, r.w - 2));
+      rect.setAttribute('height', Math.max(0, r.h - 2));
+      rect.setAttribute('fill',   color);
+      rect.setAttribute('rx',     '4');
+      rect.setAttribute('opacity','0.82');
+      g.appendChild(rect);
+
+      if (r.w > 60 && r.h > 30) {
+        const fs = Math.min(14, Math.max(9, Math.floor(r.w / 10)));
+        const cy = r.y + r.h / 2;
+
+        const tName = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        tName.setAttribute('x', r.x + r.w / 2);
+        tName.setAttribute('y', r.h > 60 ? cy - 10 : cy);
+        tName.setAttribute('text-anchor', 'middle');
+        tName.setAttribute('dominant-baseline', 'middle');
+        tName.setAttribute('fill',        '#fff');
+        tName.setAttribute('font-size',   fs + 'px');
+        tName.setAttribute('font-weight', '600');
+        const maxChars = Math.max(4, Math.floor(r.w / (fs * 0.65)));
+        tName.textContent = child.name.length > maxChars
+          ? child.name.slice(0, maxChars - 1) + '…' : child.name;
+        g.appendChild(tName);
+
+        if (r.h > 60) {
+          const tInfo = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          tInfo.setAttribute('x', r.x + r.w / 2);
+          tInfo.setAttribute('y', cy + 12);
+          tInfo.setAttribute('text-anchor', 'middle');
+          tInfo.setAttribute('dominant-baseline', 'middle');
+          tInfo.setAttribute('fill',      'rgba(255,255,255,0.8)');
+          tInfo.setAttribute('font-size', Math.min(12, Math.max(8, fs - 2)) + 'px');
+          tInfo.textContent = fmtBytes(child.size_bytes) + ' (' + pct + '%)';
+          g.appendChild(tInfo);
+        }
+      }
+
+      if (hasDrill) {
+        g.addEventListener('click', () => {
+          capTreeDrillStack.push(child);
+          document.getElementById('cap-tree-back-btn').classList.remove('hidden');
+          _capTreeUpdateBreadcrumb();
+          _capTreeRenderNode(child);
+        });
+      }
+
+      // Hover tooltip
+      const tt    = document.getElementById('cap-tree-tooltip');
+      const ttName = document.getElementById('cap-tree-tt-name');
+      const ttSize = document.getElementById('cap-tree-tt-size');
+      const ttPct  = document.getElementById('cap-tree-tt-pct');
+      g.addEventListener('mouseenter', () => {
+        ttName.textContent = child.name;
+        ttSize.textContent = fmtBytes(child.size_bytes);
+        ttPct.textContent  = pct + '% of visible';
+        tt.style.display   = 'block';
+      });
+      g.addEventListener('mousemove', e => {
+        const pad = 14;
+        let x = e.clientX + pad;
+        let y = e.clientY + pad;
+        // Keep tooltip within viewport
+        if (x + 280 > window.innerWidth)  x = e.clientX - 280 - pad;
+        if (y + 90  > window.innerHeight) y = e.clientY - 90  - pad;
+        tt.style.left = x + 'px';
+        tt.style.top  = y + 'px';
+      });
+      g.addEventListener('mouseleave', () => { tt.style.display = 'none'; });
+
+      svg.appendChild(g);
+    });
+  }
+
+  // Squarified treemap layout.
+  // values: array of numbers (pixel-areas, descending); rect: {x,y,w,h}
+  // Returns array of {x,y,w,h} rects, one per value.
+  function _squarify(values, rect) {
+    const totalArea = rect.w * rect.h;
+    const totalVal  = values.reduce((a, b) => a + b, 0) || 1;
+    const areas = values.map(v => v / totalVal * totalArea);
+    const result = new Array(values.length);
+    _squarifyRow(areas, 0, rect, result);
+    return result;
+  }
+
+  function _squarifyRow(areas, startIdx, rect, result) {
+    const remaining = areas.length - startIdx;
+    if (remaining <= 0) return;
+    if (remaining === 1) {
+      result[startIdx] = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+      return;
+    }
+    const { x, y, w, h } = rect;
+    const horiz = w >= h;
+    const short = horiz ? h : w;
+
+    let rowAreas = [];
+    let rowSum   = 0;
+    let bestWorst = Infinity;
+    let i = startIdx;
+
+    while (i < areas.length) {
+      const s = areas[i];
+      const candidate = rowSum + s;
+      const rowLen    = candidate / short;
+      // worst aspect ratio in this row
+      let worst = 0;
+      for (const a of rowAreas) {
+        const side = a / rowLen;
+        const ar   = rowLen > side ? rowLen / side : side / rowLen;
+        if (ar > worst) worst = ar;
+      }
+      const newSide = s / rowLen;
+      const newAr   = rowLen > newSide ? rowLen / newSide : newSide / rowLen;
+      if (newAr > worst) worst = newAr;
+
+      if (rowAreas.length > 0 && worst > bestWorst) break;
+      rowAreas.push(s);
+      rowSum    = candidate;
+      bestWorst = worst;
+      i++;
+    }
+
+    const rowLen = rowSum / short;
+    let pos = horiz ? y : x;
+    for (let j = 0; j < rowAreas.length; j++) {
+      const breadth = rowAreas[j] / rowLen;
+      if (horiz) {
+        result[startIdx + j] = { x, y: pos, w: rowLen, h: breadth };
+        pos += breadth;
+      } else {
+        result[startIdx + j] = { x: pos, y, w: breadth, h: rowLen };
+        pos += breadth;
+      }
+    }
+
+    const next = horiz
+      ? { x: x + rowLen, y, w: w - rowLen, h }
+      : { x, y: y + rowLen, w, h: h - rowLen };
+    _squarifyRow(areas, i, next, result);
+  }
+
+})(); // end Capacity Trend IIFE
 
 </script>
 </body>
