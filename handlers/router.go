@@ -180,6 +180,8 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleUpdateShare)))).Methods("PUT")
 	r.Handle("/api/shares/{name}",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteShare)))).Methods("DELETE")
+	r.Handle("/api/shares/{name}/clean-recycle",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCleanShareRecycleBin)))).Methods("POST")
 
 	// --- Prerequisites & systemd service (admin only) ---
 	r.Handle("/api/prereqs",

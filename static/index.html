@@ -1297,7 +1297,10 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;">
         <div class="card-sm" style="padding:12px 14px;">
-          <div class="text-3 text-xs" style="text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Used</div>
+          <div class="text-3 text-xs" style="text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">
+            Used
+            <i class="info-tip tip-down" data-tip="Total space consumed by this dataset on the pool. This is the sum of Referenced (data in the live filesystem) and Snapshot Space (blocks kept alive by snapshots). Deleting files only reduces Referenced — space is not freed until the snapshots that held those blocks are also destroyed."></i>
+          </div>
           <div id="dsd-used" style="font-size:17px;font-weight:700;color:var(--accent-2);"></div>
           <div id="dsd-used-pct" style="font-size:11px;color:var(--text-3);margin-top:2px;"></div>
         </div>
@@ -1306,8 +1309,18 @@
           <div id="dsd-avail" style="font-size:17px;font-weight:700;color:var(--accent-3);"></div>
         </div>
         <div class="card-sm" style="padding:12px 14px;">
-          <div class="text-3 text-xs" style="text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Referenced</div>
+          <div class="text-3 text-xs" style="text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">
+            Referenced
+            <i class="info-tip tip-down" data-tip="Space used by the live filesystem right now — the data you can actually see and access. This excludes blocks that are kept only by snapshots. If you delete files and have no snapshots, Referenced drops immediately."></i>
+          </div>
           <div id="dsd-refer" style="font-size:17px;font-weight:700;"></div>
+        </div>
+        <div class="card-sm" style="padding:12px 14px;">
+          <div class="text-3 text-xs" style="text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">
+            Snapshot Space
+            <i class="info-tip tip-down" data-tip="Space held exclusively by snapshots — blocks that were deleted from the live filesystem but are still referenced by at least one snapshot. This space cannot be reclaimed until the snapshots that reference it are destroyed. A high value here means old snapshots are retaining significant data."></i>
+          </div>
+          <div id="dsd-usedsnap" style="font-size:17px;font-weight:700;color:var(--accent-warn,#f0b429);"></div>
         </div>
         <div class="card-sm" style="padding:12px 14px;">
           <div class="text-3 text-xs" style="text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;">Quota</div>
@@ -2967,8 +2980,42 @@ async function loadPrereqs() {
   } else if (sudo.type === 'hardened') {
     sudoIcon = '✕'; sudoLabelColor = 'var(--accent-danger)';
     sudoLabel = 'Sudo — hardened (incomplete)';
-    sudoDesc = 'Specific sudo rules are in place but the following required commands are missing: <strong style="color:var(--accent-danger);">'
-      + sudoMissing.map(c => esc(c)).join(', ') + '</strong>';
+    const cmdReasons = {
+      zpool:      'ZFS pool creation, deletion, status, import/export and scrub',
+      'zpool get':'Reading pool-level properties (e.g. ashift) used in pool detail and disk diagnostics',
+      zfs:        'Dataset and snapshot management, properties, encryption key load/unload',
+      smartctl:   'SMART disk health monitoring (SAS/SATA drives)',
+      nvme:       'NVMe drive health and temperature monitoring',
+      modprobe:   'Loading the ZFS kernel module on startup',
+      'apt-get':  'OS package installation and system updates',
+      systemctl:  'Starting, stopping and restarting services (Samba, NFS, portal)',
+      tee:        'Writing system config files (smb.conf, /etc/exports, zfsnas.service)',
+      useradd:    'Creating Linux system accounts for SMB-only users',
+      usermod:    'Adding users to the sambashare group',
+      smbpasswd:  'Setting Samba passwords for SMB share authentication',
+      chmod:      'Setting permissions on newly created share directories',
+      exportfs:   'Applying NFS export configuration after changes',
+      timedatectl:'Reading and setting the system timezone',
+      shutdown:   'System shutdown and reboot from the portal power menu',
+      du:         'Folder usage scanning for the Folder TreeMap feature',
+      find:       'Recycle bin cleanup — deleting files older than the configured retention from .recycle directories',
+      wipefs:     'Wiping disk signatures before adding a disk to a pool',
+      sgdisk:     'Partitioning disks with a ZFS-compatible GPT layout',
+      dd:         'Zero-filling disks during the wipe operation',
+      partprobe:  'Refreshing the kernel partition table after disk changes',
+      udevadm:    'Waiting for udev to settle after disk operations',
+      blkid:      'Identifying disk UUIDs and filesystem types',
+    };
+    const missingRows = sudoMissing.map(c => {
+      const reason = cmdReasons[c] || 'required for portal operation';
+      return `<tr>
+        <td style="padding:4px 10px 4px 0;white-space:nowrap;font-family:monospace;font-size:12px;color:var(--accent-danger);vertical-align:top;">${esc(c)}</td>
+        <td style="padding:4px 0;font-size:12px;color:var(--text-2);">${esc(reason)}</td>
+      </tr>`;
+    }).join('');
+    sudoDesc = 'Specific sudo rules are in place but the following required commands are missing from your sudoers configuration:'
+      + `<table style="margin-top:8px;border-collapse:collapse;">${missingRows}</table>`
+      + `<div style="margin-top:8px;font-size:12px;color:var(--text-3);">See <a href="https://github.com/macgaver/zfsnas-chezmoi/blob/main/SECURITY.md" target="_blank" rel="noopener" style="color:var(--accent-2);">SECURITY.md</a> for the full sudoers template.</div>`;
   } else {
     sudoIcon = '✕'; sudoLabelColor = 'var(--accent-danger)';
     sudoLabel = 'No sudo access';
@@ -5923,9 +5970,10 @@ async function loadDatasets() {
   renderDatasets(el);
 }
 
-function _datasetRow(d, showComment) {
+function _datasetRow(d, showComment, showQuota) {
   const indent = d.depth * 24;
   const isRoot = d.depth === 0;
+  const snap = d.used_by_snapshots || 0;
   return `
     <tr>
       <td>
@@ -5937,6 +5985,9 @@ function _datasetRow(d, showComment) {
           </div>
         </div>
       </td>
+      <td style="font-family:monospace;font-size:13px;white-space:nowrap;">
+        ${fmtBytes(d.refer)}<span style="color:var(--text-3);font-size:11px;"> + </span><span style="color:${snap>0?'var(--accent-warn,#f0b429)':'var(--text-3)'};">${snap>0?fmtBytes(snap):'0'}</span>
+      </td>
       <td style="font-family:monospace;font-size:13px;">
         ${(() => {
           const poolTotal = poolData ? (poolData.usable_size || (poolData.usable_used + poolData.usable_avail) || poolData.size) : 0;
@@ -5947,15 +5998,14 @@ function _datasetRow(d, showComment) {
           return `${fmtBytes(d.used)}<div title="${pct.toFixed(1)}% ${label}" style="margin-top:3px;height:3px;border-radius:2px;background:rgba(128,128,128,0.3);width:72px;overflow:hidden;"><div style="height:100%;width:${pct.toFixed(1)}%;background:${barColor};border-radius:2px;"></div></div>`;
         })()}
       </td>
-      <td style="font-family:monospace;font-size:13px;">${d.quota > 0 ? fmtBytes(d.quota) : 'none'}</td>
+      ${showQuota ? `<td style="font-family:monospace;font-size:13px;">${d.quota > 0 ? fmtBytes(d.quota) : 'none'}</td>` : ''}
       <td style="font-size:13px;">${esc(d.compression)} <span class="text-3">${esc(d.compress_ratio)}</span></td>
       ${showComment ? `<td style="font-size:12px;color:var(--text-2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d.comment||'')}">${d.comment ? esc(d.comment) : '<span style="color:var(--text-3);">—</span>'}</td>` : ''}
-      <td>
+      <td style="text-align:right;white-space:nowrap;">
         ${!isRoot && currentUser.role==='admin' ? `
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="openCreateSnapshot('${esc(d.name)}')">📸</button>
-            <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}')">Edit</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteDataset('${esc(d.name)}')">Delete</button>
+          <button class="btn btn-ghost btn-sm" onclick="openEditDataset('${esc(d.name)}')">Edit</button>
+          <div class="row-menu-wrap" style="display:inline-block;">
+            <button class="row-menu-btn" data-dsname="${esc(d.name)}" onclick="toggleDsMenu(event)" title="More actions">⋮</button>
           </div>` : ''}
       </td>
     </tr>`;
@@ -5986,7 +6036,8 @@ function renderDatasets(el) {
     const collapsed = !!_dsCollapsed.get(poolName);
     const poolDs = datasetCache.filter(d => d.name.split('/')[0] === poolName && d.depth > 0);
     const showComment = poolDs.some(d => d.comment && d.comment.trim());
-    const rows = poolDs.map(d => _datasetRow(d, showComment)).join('');
+    const showQuota   = poolDs.some(d => d.quota > 0);
+    const rows = poolDs.map(d => _datasetRow(d, showComment, showQuota)).join('');
     const header = multiPool ? `
       <div onclick="toggleDsSection('${esc(poolName)}')"
            style="display:flex;align-items:center;gap:8px;margin:20px 0 8px;cursor:pointer;user-select:none;">
@@ -5998,8 +6049,9 @@ function renderDatasets(el) {
         </svg>
         <span style="font-size:14px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:4px;">🗄 ${esc(poolName)}${(()=>{ const p=allPoolsData.find(x=>x.name===poolName); return p&&p.encrypted?lockSVG(p.key_locked):''; })()}</span>
       </div>` : '';
+    const referSnapTh = `<th>Refer+Snap <i class="info-tip tip-down" data-tip="Referenced: space used by the live filesystem right now.&#10;&#10;+ Snapshot space: blocks kept alive by snapshots after files were deleted. This space cannot be reclaimed until those snapshots are destroyed.&#10;&#10;Together they equal the total Used space."></i></th>`;
     const tableContent = rows
-      ? `<table><thead><tr><th>Dataset</th><th>Used</th><th>Quota</th><th>Compression</th>${showComment ? '<th>Comment</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>`
+      ? `<table><thead><tr><th>Dataset</th>${referSnapTh}<th>Used</th>${showQuota ? '<th>Quota</th>' : ''}<th>Compression</th>${showComment ? '<th>Comment</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>`
       : `<div style="padding:16px 0;color:var(--text-3);font-size:13px;">No datasets yet.</div>`;
     return `${header}<div id="ds-table-${esc(poolName)}" class="table-wrap" style="${collapsed ? 'display:none' : ''}">${tableContent}</div>`;
   }).join('');
@@ -6356,11 +6408,10 @@ function renderSchedules(el, policies) {
       <td style="font-size:12px;color:var(--text-2);">${next}</td>
       <td>${status}</td>
       <td>${p.enabled ? '<span style="color:var(--accent-3);">On</span>' : '<span style="color:var(--text-3);">Off</span>'}</td>
-      <td>${currentUser.role==='admin' ? `
-        <div style="display:flex;gap:4px;">
-          <button class="btn btn-ghost btn-sm" onclick="runScheduleNow('${esc(p.id)}')">▶ Now</button>
-          <button class="btn btn-ghost btn-sm" onclick="openEditSchedule(${i})">Edit</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteSchedule('${esc(p.id)}')">Delete</button>
+      <td style="text-align:right;white-space:nowrap;">${currentUser.role==='admin' ? `
+        <button class="btn btn-ghost btn-sm" onclick="openEditSchedule(${i})">Edit</button>
+        <div class="row-menu-wrap" style="display:inline-block;">
+          <button class="row-menu-btn" data-schedid="${esc(p.id)}" onclick="toggleSchedMenu(event)" title="More actions">⋮</button>
         </div>` : ''}</td>
     </tr>`;
   }).join('');
@@ -6703,6 +6754,10 @@ function openDatasetDetail(name) {
   document.getElementById('dsd-used').style.color     = barColor;
   document.getElementById('dsd-avail').textContent    = fmtBytes(d.avail);
   document.getElementById('dsd-refer').textContent    = fmtBytes(d.refer);
+  const usedSnap = d.used_by_snapshots || 0;
+  const snapEl = document.getElementById('dsd-usedsnap');
+  snapEl.textContent   = usedSnap > 0 ? fmtBytes(usedSnap) : '0';
+  snapEl.style.color   = usedSnap > 0 ? 'var(--accent-warn,#f0b429)' : 'var(--text-3)';
   document.getElementById('dsd-quota').textContent    = d.quota > 0 ? fmtBytes(d.quota) : '—';
 
   document.getElementById('dsd-comp').textContent       = d.compression || '—';
@@ -7157,11 +7212,11 @@ function renderShares(el, shares) {
         ${s.guest_ok ? '<span style="color:var(--accent-warn);">Guest OK</span>' : ''}
         ${(s.valid_users&&s.valid_users.length) ? esc(s.valid_users.join(', ')) : (s.guest_ok ? '' : 'All users')}
       </td>
-      <td>
+      <td style="text-align:right;white-space:nowrap;">
         ${currentUser.role==='admin' ? `
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="openEditShareByIdx(${i})">Edit</button>
-            <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteShareByIdx(${i})">Delete</button>
+          <button class="btn btn-ghost btn-sm" onclick="openEditShareByIdx(${i})">Edit</button>
+          <div class="row-menu-wrap" style="display:inline-block;">
+            <button class="row-menu-btn" onclick="toggleShareMenu(event,${i})" title="More actions">⋮</button>
           </div>` : ''}
       </td>
     </tr>`).join('');
@@ -7179,6 +7234,73 @@ function renderShares(el, shares) {
     <div class="text-3 text-sm" style="margin-top:12px;">
       Connect from Windows: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px;">\\\\${window._serverIP || '&lt;server-ip&gt;'}\\&lt;share-name&gt;</code>
     </div>`;
+}
+
+// --- Row burger menu ---
+let _openShareMenu = null; // { btn, dropdown }
+
+function closeShareMenus() {
+  if (_openShareMenu) {
+    _openShareMenu.dropdown.remove();
+    _openShareMenu = null;
+  }
+}
+
+document.addEventListener('click', closeShareMenus);
+window.addEventListener('scroll', closeShareMenus, true);
+
+function toggleShareMenu(evt, idx) {
+  evt.stopPropagation();
+  const btn = evt.currentTarget;
+
+  // Close if already open for this button
+  if (_openShareMenu && _openShareMenu.btn === btn) {
+    closeShareMenus();
+    return;
+  }
+  closeShareMenus();
+
+  const s = _sharesCache[idx];
+  const dd = document.createElement('div');
+  dd.className = 'row-menu-dropdown';
+  dd.addEventListener('click', e => e.stopPropagation());
+
+  if (s.recycle_bin) {
+    const cleanBtn = document.createElement('button');
+    cleanBtn.textContent = '🗑 Clean Recycle Bin';
+    cleanBtn.addEventListener('click', () => { closeShareMenus(); cleanShareRecycleBin(s.name); });
+    dd.appendChild(cleanBtn);
+    const sep = document.createElement('hr');
+    sep.className = 'menu-sep';
+    dd.appendChild(sep);
+  }
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', () => { closeShareMenus(); deleteShareByIdx(idx); });
+  dd.appendChild(delBtn);
+
+  // Append to body so it escapes table overflow clipping, then position under button
+  document.body.appendChild(dd);
+  const rect = btn.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top  = (rect.bottom + 4) + 'px';
+  dd.style.left = Math.max(0, rect.right - dd.offsetWidth) + 'px';
+
+  _openShareMenu = { btn, dropdown: dd };
+}
+
+async function cleanShareRecycleBin(name) {
+  const jobId = 'recycle-' + name;
+  addActiveJob(jobId, 'Cleaning recycle bin — ' + name);
+  try {
+    const resp = await fetch('/api/shares/' + encodeURIComponent(name) + '/clean-recycle', { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) alert('Clean failed: ' + (data.error || 'unknown error'));
+  } finally {
+    removeActiveJob(jobId);
+  }
 }
 
 async function openCreateShare() {
@@ -7484,10 +7606,10 @@ function renderNFSShares(el, shares) {
         : '<span class="badge badge-ok">Read/Write</span>'}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--text-2);">${nfsOptsDisplay(s)}</td>
       ${showComment ? `<td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>` : ''}
-      <td>${currentUser.role==='admin' ? `
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-ghost btn-sm" onclick="openEditNFSShare(${i})">Edit</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--accent-danger);" onclick="deleteNFSShare('${esc(s.id)}')">Delete</button>
+      <td style="text-align:right;white-space:nowrap;">${currentUser.role==='admin' ? `
+        <button class="btn btn-ghost btn-sm" onclick="openEditNFSShare(${i})">Edit</button>
+        <div class="row-menu-wrap" style="display:inline-block;">
+          <button class="row-menu-btn" onclick="toggleNFSMenu(event,${i})" title="More actions">⋮</button>
         </div>` : ''}</td>
     </tr>`).join('');
 
@@ -7607,6 +7729,114 @@ function deleteNFSShare(id) {
   document.getElementById('btn-delete-share-confirm').disabled = false;
   document.getElementById('btn-delete-share-confirm').textContent = 'Delete';
   document.getElementById('modal-delete-share').classList.remove('hidden');
+}
+
+function toggleSchedMenu(evt) {
+  evt.stopPropagation();
+  const btn = evt.currentTarget;
+  const schedId = btn.dataset.schedid;
+
+  if (_openShareMenu && _openShareMenu.btn === btn) {
+    closeShareMenus();
+    return;
+  }
+  closeShareMenus();
+
+  const dd = document.createElement('div');
+  dd.className = 'row-menu-dropdown';
+  dd.addEventListener('click', e => e.stopPropagation());
+
+  const runBtn = document.createElement('button');
+  runBtn.textContent = '▶ Run Now';
+  runBtn.addEventListener('click', () => { closeShareMenus(); runScheduleNow(schedId); });
+  dd.appendChild(runBtn);
+
+  const sep = document.createElement('hr');
+  sep.className = 'menu-sep';
+  dd.appendChild(sep);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', () => { closeShareMenus(); deleteSchedule(schedId); });
+  dd.appendChild(delBtn);
+
+  document.body.appendChild(dd);
+  const rect = btn.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top  = (rect.bottom + 4) + 'px';
+  dd.style.left = Math.max(0, rect.right - dd.offsetWidth) + 'px';
+
+  _openShareMenu = { btn, dropdown: dd };
+}
+
+function toggleDsMenu(evt) {
+  evt.stopPropagation();
+  const btn = evt.currentTarget;
+  const dsName = btn.dataset.dsname;
+
+  if (_openShareMenu && _openShareMenu.btn === btn) {
+    closeShareMenus();
+    return;
+  }
+  closeShareMenus();
+
+  const dd = document.createElement('div');
+  dd.className = 'row-menu-dropdown';
+  dd.addEventListener('click', e => e.stopPropagation());
+
+  const snapBtn = document.createElement('button');
+  snapBtn.textContent = '📸 Take Snapshot';
+  snapBtn.addEventListener('click', () => { closeShareMenus(); openCreateSnapshot(dsName); });
+  dd.appendChild(snapBtn);
+
+  const sep = document.createElement('hr');
+  sep.className = 'menu-sep';
+  dd.appendChild(sep);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', () => { closeShareMenus(); deleteDataset(dsName); });
+  dd.appendChild(delBtn);
+
+  document.body.appendChild(dd);
+  const rect = btn.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top  = (rect.bottom + 4) + 'px';
+  dd.style.left = Math.max(0, rect.right - dd.offsetWidth) + 'px';
+
+  _openShareMenu = { btn, dropdown: dd };
+}
+
+function toggleNFSMenu(evt, idx) {
+  evt.stopPropagation();
+  const btn = evt.currentTarget;
+
+  if (_openShareMenu && _openShareMenu.btn === btn) {
+    closeShareMenus();
+    return;
+  }
+  closeShareMenus();
+
+  const s = _nfsSharesCache[idx];
+  const dd = document.createElement('div');
+  dd.className = 'row-menu-dropdown';
+  dd.addEventListener('click', e => e.stopPropagation());
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', () => { closeShareMenus(); deleteNFSShare(s.id); });
+  dd.appendChild(delBtn);
+
+  document.body.appendChild(dd);
+  const rect = btn.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top  = (rect.bottom + 4) + 'px';
+  dd.style.left = Math.max(0, rect.right - dd.offsetWidth) + 'px';
+
+  _openShareMenu = { btn, dropdown: dd };
 }
 
 // ===== Helpers =====

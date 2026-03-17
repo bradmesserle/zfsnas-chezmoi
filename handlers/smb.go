@@ -185,6 +185,29 @@ func HandleSetSMBPassword(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"message": "SMB password set for " + req.Username})
 }
 
+// HandleCleanShareRecycleBin immediately runs the recycle-bin cleanup for one share.
+func HandleCleanShareRecycleBin(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(mux.Vars(r)["name"])
+	if name == "" {
+		jsonErr(w, http.StatusBadRequest, "share name required in URL")
+		return
+	}
+	if err := system.CleanShareRecycleBin(config.Dir(), name); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionEnableShare,
+		Target:  name,
+		Result:  audit.ResultOK,
+		Details: "recycle bin cleaned manually",
+	})
+	jsonOK(w, map[string]string{"message": "recycle bin cleaned"})
+}
+
 // HandleDeleteShare removes an SMB share by name.
 func HandleDeleteShare(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(mux.Vars(r)["name"])

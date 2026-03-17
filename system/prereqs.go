@@ -95,26 +95,54 @@ type SudoStatus struct {
 	MissingCommands []string `json:"missing_commands"`
 }
 
-// requiredSudoCmds lists every command covered by the hardened sudoers template
-// in SECURITY.md. The check flags any command from this list that is absent
-// from the running user's sudo -l output.
-var requiredSudoCmds = []string{
-	// ZFS
-	"zpool", "zfs",
+// sudoCheck describes one entry that must be present in the hardened sudoers.
+// Binary is resolved via LookPath to get the full path; Match is the substring
+// that must appear in "sudo -l" output.  When a command is a specific subcommand
+// (e.g. "zpool get") set Binary to the executable and Match to the subcommand
+// suffix — the checker will look for "<fullpath> <match>" in the output.
+type sudoCheck struct {
+	Binary string // executable name passed to exec.LookPath
+	Match  string // extra suffix after the binary path (empty = binary path alone)
+	Name   string // display name reported in MissingCommands
+}
+
+// requiredSudoChecks lists every entry covered by the hardened sudoers template
+// in SECURITY.md. The check flags any entry whose expected string is absent from
+// the running user's "sudo -l -n" output.
+var requiredSudoChecks = []sudoCheck{
+	// ZFS pool management
+	{Binary: "zpool", Name: "zpool"},
+	{Binary: "zpool", Match: "get", Name: "zpool get"}, // used for ashift / pool properties
+	// ZFS dataset management
+	{Binary: "zfs", Name: "zfs"},
 	// Hardware monitoring
-	"smartctl", "nvme",
+	{Binary: "smartctl", Name: "smartctl"},
+	{Binary: "nvme", Name: "nvme"},
 	// Kernel / packages / service management
-	"modprobe", "apt-get", "systemctl", "tee",
+	{Binary: "modprobe", Name: "modprobe"},
+	{Binary: "apt-get", Name: "apt-get"},
+	{Binary: "systemctl", Name: "systemctl"},
+	{Binary: "tee", Name: "tee"},
 	// User / Samba
-	"useradd", "usermod", "smbpasswd", "chmod",
+	{Binary: "useradd", Name: "useradd"},
+	{Binary: "usermod", Name: "usermod"},
+	{Binary: "smbpasswd", Name: "smbpasswd"},
+	{Binary: "chmod", Name: "chmod"},
 	// NFS
-	"exportfs",
+	{Binary: "exportfs", Name: "exportfs"},
 	// System
-	"timedatectl", "shutdown",
-	// Folder usage scanning
-	"du",
-	// Disk preparation & wipe (ZFSNAS_DISK in SECURITY.md)
-	"wipefs", "sgdisk", "dd", "partprobe", "udevadm", "blkid",
+	{Binary: "timedatectl", Name: "timedatectl"},
+	{Binary: "shutdown", Name: "shutdown"},
+	// Folder usage scanning & recycle bin cleanup
+	{Binary: "du", Name: "du"},
+	{Binary: "find", Name: "find"},
+	// Disk preparation & wipe
+	{Binary: "wipefs", Name: "wipefs"},
+	{Binary: "sgdisk", Name: "sgdisk"},
+	{Binary: "dd", Name: "dd"},
+	{Binary: "partprobe", Name: "partprobe"},
+	{Binary: "udevadm", Name: "udevadm"},
+	{Binary: "blkid", Name: "blkid"},
 }
 
 // CheckSudoAccess probes the effective sudo permissions of the running process.
@@ -135,15 +163,24 @@ func CheckSudoAccess() SudoStatus {
 		return SudoStatus{Type: "all", MissingCommands: []string{}}
 	}
 
-	// Hardened configuration — check each required command.
+	// Hardened configuration — check each required entry.
 	var missing []string
-	for _, cmd := range requiredSudoCmds {
-		path, err := exec.LookPath(cmd)
+	for _, chk := range requiredSudoChecks {
+		path, err := exec.LookPath(chk.Binary)
 		if err != nil {
-			continue // not installed on this system, not a sudo gap
+			continue // binary not installed on this system — not a sudo gap
 		}
-		if !strings.Contains(sudoList, path) && !strings.Contains(sudoList, "/"+cmd) {
-			missing = append(missing, cmd)
+		// Primary needle uses the resolved path; fallback uses "/binary" so that
+		// a path mismatch between LookPath and the sudoers file (e.g. /usr/sbin
+		// vs /usr/bin) does not produce a false positive.
+		needle := path
+		altNeedle := "/" + chk.Binary
+		if chk.Match != "" {
+			needle = path + " " + chk.Match
+			altNeedle = "/" + chk.Binary + " " + chk.Match
+		}
+		if !strings.Contains(sudoList, needle) && !strings.Contains(sudoList, altNeedle) {
+			missing = append(missing, chk.Name)
 		}
 	}
 	if missing == nil {

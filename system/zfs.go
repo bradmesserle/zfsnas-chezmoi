@@ -1333,6 +1333,7 @@ type Dataset struct {
 	EncryptionAlgorithm string `json:"encryption_algorithm"` // e.g. "aes-256-gcm", "" when off
 	Mounted             bool   `json:"mounted"`              // zfs mounted == "yes"
 	CanMount            string `json:"canmount"`             // on|off|noauto
+	UsedBySnapshots     uint64 `json:"used_by_snapshots"`    // space held by snapshots (usedbysnapshots)
 }
 
 // DatasetCreateOptions holds all properties for creating a new dataset.
@@ -1370,7 +1371,7 @@ func ListAllDatasets() ([]Dataset, error) {
 func ListDatasets(poolName string) ([]Dataset, error) {
 	out, err := exec.Command("sudo", "zfs", "list", "-Hp", "-r",
 		"-t", "filesystem",
-		"-o", "name,used,avail,refer,quota,refquota,compression,compressratio,recordsize,mountpoint,sync,dedup,casesensitivity,refreservation,zfsnas:comment,encryption,keystatus,mounted,canmount",
+		"-o", "name,used,avail,refer,quota,refquota,compression,compressratio,recordsize,mountpoint,sync,dedup,casesensitivity,refreservation,zfsnas:comment,encryption,keystatus,mounted,canmount,usedbysnapshots",
 		poolName).Output()
 	if err != nil {
 		return nil, fmt.Errorf("zfs list failed: %w", err)
@@ -1432,6 +1433,10 @@ func parseDatasetLine(line, poolName string) (Dataset, error) {
 	if len(f) >= 19 {
 		dsCanMount = f[18]
 	}
+	var usedBySnapshots uint64
+	if len(f) >= 20 {
+		usedBySnapshots, _ = strconv.ParseUint(f[19], 10, 64)
+	}
 
 	// Derive human-readable record size string.
 	recordSizeRaw := formatBytesShort(recordSize)
@@ -1468,6 +1473,7 @@ func parseDatasetLine(line, poolName string) (Dataset, error) {
 		EncryptionAlgorithm: dsEncAlgo,
 		Mounted:             dsMounted,
 		CanMount:            dsCanMount,
+		UsedBySnapshots:     usedBySnapshots,
 	}, nil
 }
 

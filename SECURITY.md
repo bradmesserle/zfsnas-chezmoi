@@ -35,11 +35,16 @@ Run `sudo visudo -f /etc/sudoers.d/zfsnas` and paste the block below.
 > **Note:** Paths are correct for Ubuntu 22.04 / 24.04 LTS. Verify with `which <command>` if you are on a different distribution.
 
 ```sudoers
-# ── ZFS pool management ───────────────────────────────────────────────────────
+# ── ZFS pool & dataset management ────────────────────────────────────────────
+# since v1.0.0 — pool creation, import, status, dataset CRUD, snapshots
+# since v2.0.0 — zpool scrub / scrub -s (Scrub Management page)
+# since v4.0.0 — zpool offline/online/clear (Pool Fixer Wizard)
+# since v5.0.0 — zfs load-key / unload-key (native encryption)
 Cmnd_Alias ZFSNAS_ZFS = \
     /usr/sbin/zpool list *, \
     /usr/sbin/zpool status, \
     /usr/sbin/zpool status *, \
+    /usr/sbin/zpool get *, \
     /usr/sbin/zpool create *, \
     /usr/sbin/zpool import, \
     /usr/sbin/zpool import *, \
@@ -47,14 +52,14 @@ Cmnd_Alias ZFSNAS_ZFS = \
     /usr/sbin/zpool add *, \
     /usr/sbin/zpool attach *, \
     /usr/sbin/zpool detach *, \
+    /usr/sbin/zpool remove *, \
+    /usr/sbin/zpool destroy *, \
+    /usr/sbin/zpool upgrade *, \
+    /usr/sbin/zpool scrub *, \
+    /usr/sbin/zpool scrub -s *, \
     /usr/sbin/zpool offline *, \
     /usr/sbin/zpool online *, \
     /usr/sbin/zpool clear *, \
-    /usr/sbin/zpool remove *, \
-    /usr/sbin/zpool scrub *, \
-    /usr/sbin/zpool scrub -s *, \
-    /usr/sbin/zpool destroy *, \
-    /usr/sbin/zpool upgrade *, \
     /usr/sbin/zfs list *, \
     /usr/sbin/zfs get *, \
     /usr/sbin/zfs set *, \
@@ -69,7 +74,9 @@ Cmnd_Alias ZFSNAS_ZFS = \
     /usr/sbin/zfs load-key *, \
     /usr/sbin/zfs unload-key *
 
-# ── Samba ─────────────────────────────────────────────────────────────────────
+# ── Samba (SMB shares) ────────────────────────────────────────────────────────
+# since v1.0.0 — Samba service control, user provisioning, share config write
+# since v6.0.0 — find (recycle bin cleanup: delete files older than retention in .recycle/)
 Cmnd_Alias ZFSNAS_SMB = \
     /usr/bin/systemctl reload smbd, \
     /usr/bin/systemctl restart smbd, \
@@ -81,22 +88,29 @@ Cmnd_Alias ZFSNAS_SMB = \
     /usr/sbin/usermod -aG sambashare *, \
     /usr/bin/smbpasswd -s -a *, \
     /usr/bin/chmod 777 *, \
-    /usr/bin/tee /etc/samba/smb.conf
+    /usr/bin/tee /etc/samba/smb.conf, \
+    /usr/bin/find *
 
-# ── NFS ───────────────────────────────────────────────────────────────────────
+# ── NFS shares ────────────────────────────────────────────────────────────────
+# since v2.0.0 — NFS share management and export config write
 Cmnd_Alias ZFSNAS_NFS = \
     /usr/sbin/exportfs -ra, \
     /usr/bin/systemctl start nfs-server, \
     /usr/bin/systemctl stop nfs-server, \
     /usr/bin/tee /etc/exports
 
-# ── SMART / disks ─────────────────────────────────────────────────────────────
+# ── SMART & hardware monitoring ───────────────────────────────────────────────
+# since v1.0.0 — SMART disk health data (SAS/SATA)
+# since v3.0.0 — NVMe health and temperature monitoring
 Cmnd_Alias ZFSNAS_SMART = \
     /usr/sbin/smartctl -j -a *, \
     /usr/sbin/smartctl -j -i *, \
     /usr/bin/nvme smart-log -o json *
 
 # ── Disk preparation & wipe ───────────────────────────────────────────────────
+# since v1.0.0 — wipe and partition a disk before adding it to a pool;
+#   wipefs clears signatures, sgdisk creates GPT layout, dd zero-fills,
+#   partprobe + udevadm settle kernel/udev state, blkid reads UUIDs
 Cmnd_Alias ZFSNAS_DISK = \
     /usr/bin/wipefs -a *, \
     /usr/bin/sgdisk --zap-all *, \
@@ -106,11 +120,14 @@ Cmnd_Alias ZFSNAS_DISK = \
     /usr/bin/udevadm settle *, \
     /usr/sbin/blkid -o export
 
-# ── Folder usage scanning ──────────────────────────────────────────────────────
+# ── Folder usage scanning ─────────────────────────────────────────────────────
+# since v6.0.0 — Folder TreeMap feature; scans dataset mount points for per-folder sizes
 Cmnd_Alias ZFSNAS_SCAN = \
     /usr/bin/du -b -d 6 *
 
-# ── System ────────────────────────────────────────────────────────────────────
+# ── System management ─────────────────────────────────────────────────────────
+# since v1.0.0 — timezone setting, shutdown/reboot from power menu, ZFS kernel module load
+# since v3.0.0 — systemctl restart zfsnas ("Restart Portal" in the power menu)
 Cmnd_Alias ZFSNAS_SYSTEM = \
     /usr/bin/timedatectl set-timezone *, \
     /usr/sbin/shutdown -r now, \
@@ -118,7 +135,10 @@ Cmnd_Alias ZFSNAS_SYSTEM = \
     /usr/sbin/modprobe zfs, \
     /usr/bin/systemctl restart zfsnas
 
-# ── OS updates & service install ──────────────────────────────────────────────
+# ── OS updates & service installation ────────────────────────────────────────
+# since v1.0.0 — prerequisite package install (apt-get install) and
+#   systemd service setup (tee + daemon-reload + enable)
+# since v3.0.0 — OS package updates (apt-get upgrade) from the Settings page
 Cmnd_Alias ZFSNAS_APT = \
     /usr/bin/apt-get update -qq, \
     /usr/bin/apt-get install -y *, \
@@ -149,8 +169,9 @@ ExecStart=/opt/zfsnas/zfsnas
 - **`chmod 777`** — the portal applies this to newly created SMB share paths. If your shares always live under a fixed parent (e.g. `/data`), you can tighten this to `/usr/bin/chmod 777 /data/*`.
 - **`tee` for config files** — write access is limited to the three specific paths listed (`smb.conf`, `exports`, `zfsnas.service`). The wildcard form `tee *` is intentionally avoided.
 - **`dd` / `wipefs` / `sgdisk`** — used by the "Wipe Disk" feature before adding a disk to a pool. These are destructive by design; ensure only trusted admins have access to the portal.
-- **`zfs load-key` / `zfs unload-key`** — used for ZFS native encryption. Key files are stored in `config/keystore/` and are only readable by the `zfsnas` user.
-- **`systemctl restart zfsnas`** — used by the "Restart Portal" option in the power menu. Only available to admin-role users.
+- **`zfs load-key` / `zfs unload-key`** — used for ZFS native encryption (v5.0.0+). Key files are stored in `config/keystore/` and are only readable by the `zfsnas` user.
+- **`systemctl restart zfsnas`** — used by the "Restart Portal" option in the power menu (v3.0.0+). Only available to admin-role users.
+- **`find *`** — used to delete files and empty directories in `.recycle/` folders (v6.0.0+). The wildcard allows any path to be passed; scope is limited in practice to share mount points. If you want to tighten this, restrict to your shares root (e.g. `/usr/bin/find /data/*`).
 - **Command paths** — paths shown are for Ubuntu 22.04/24.04. Some tools (`sgdisk`, `wipefs`, `nvme`) may live under `/usr/sbin/` instead of `/usr/bin/` on older releases; verify with `which <command>`.
 
 ---

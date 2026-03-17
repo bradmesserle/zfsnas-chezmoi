@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -315,7 +316,10 @@ func StartRecycleCleaner(configDir string) {
 	go func() {
 		for {
 			now := time.Now()
-			next := time.Date(now.Year(), now.Month(), now.Day()+1, 2, 0, 0, 0, now.Location())
+			next := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, now.Location())
+			if !next.After(now) {
+				next = next.Add(24 * time.Hour)
+			}
 			time.Sleep(time.Until(next))
 			runRecycleCleaner(configDir)
 		}
@@ -342,30 +346,53 @@ func runRecycleCleaner(configDir string) {
 	}
 }
 
-func cleanOlderThan(dir string, cutoff time.Time) error {
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil
-	}
+// CleanShareRecycleBin immediately runs the recycle-bin cleanup for a single
+// named share, honouring its configured RecycleRetainDays.
+func CleanShareRecycleBin(configDir, name string) error {
+	shares, err := ListSMBShares(configDir)
 	if err != nil {
 		return err
 	}
-	for _, e := range entries {
-		p := filepath.Join(dir, e.Name())
-		info, err := e.Info()
-		if err != nil {
+	for _, s := range shares {
+		if !strings.EqualFold(s.Name, name) {
 			continue
 		}
-		if info.ModTime().Before(cutoff) {
-			if e.IsDir() {
-				_ = os.RemoveAll(p)
-			} else {
-				_ = os.Remove(p)
-			}
-		} else if e.IsDir() {
-			_ = cleanOlderThan(p, cutoff)
+		if !s.RecycleBin {
+			return fmt.Errorf("share %q does not have a recycle bin configured", name)
 		}
+		if s.RecycleRetainDays <= 0 {
+			return nil // no retention limit — nothing to prune
+		}
+		recycleDir := filepath.Join(s.Path, ".recycle")
+		cutoff := time.Now().AddDate(0, 0, -s.RecycleRetainDays)
+		return cleanOlderThan(recycleDir, cutoff)
 	}
+	return fmt.Errorf("share %q not found", name)
+}
+
+// cleanOlderThan removes files (and then empty directories) under dir whose
+// mtime is before cutoff.  It uses sudo find so that it can delete files
+// owned by arbitrary SMB users without the service account needing ownership.
+func cleanOlderThan(dir string, cutoff time.Time) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil
+	}
+	days := int(time.Since(cutoff).Hours() / 24)
+	mtimeArg := "+" + strconv.Itoa(days)
+
+	// Delete files (and symlinks) older than the cutoff.
+	out, err := exec.Command("sudo", "find", dir,
+		"-not", "-type", "d",
+		"-mtime", mtimeArg,
+		"-delete").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("find -delete files: %s", strings.TrimSpace(string(out)))
+	}
+
+	// Remove any directories that are now empty (ignore errors — best effort).
+	_ = exec.Command("sudo", "find", dir,
+		"-mindepth", "1", "-type", "d", "-empty", "-delete").Run()
+
 	return nil
 }
 
