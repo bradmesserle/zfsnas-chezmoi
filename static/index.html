@@ -189,8 +189,8 @@
       <a id="app-version" href="https://github.com/macgaver/zfsnas-chezmoi/releases" target="_blank" rel="noopener"
          style="display:inline-block;margin-top:6px;font-size:11px;font-family:'SF Mono',monospace;color:var(--text-3);border:1px solid var(--border);padding:2px 8px;border-radius:10px;text-decoration:none;letter-spacing:.02em;">v…</a>
       <div id="sidebar-update-badge" onclick="showPage('updates')" class="hidden"
-           style="margin-top:5px;font-size:11px;font-weight:600;color:var(--accent-warn);cursor:pointer;padding:2px 8px;border-radius:10px;border:1px solid rgba(255,214,10,0.35);background:rgba(255,214,10,0.08);letter-spacing:.02em;">
-        ⬆ new version available
+           style="margin-top:4px;font-size:11px;font-weight:600;color:var(--accent-warn);cursor:pointer;padding:1px 6px;border-radius:8px;border:1px solid rgba(255,214,10,0.35);background:rgba(255,214,10,0.08);letter-spacing:.02em;display:inline-block;">
+        ⬆ v…
       </div>
     </div>
 
@@ -7920,7 +7920,7 @@ async function _sidebarVersionCheck() {
   }
 
   if (data && data.update_available) {
-    if (badge) badge.classList.remove('hidden');
+    if (badge) { badge.textContent = '⬆ v' + data.latest; badge.classList.remove('hidden'); }
     const dot = document.getElementById('nav-updates-dot');
     if (dot) dot.style.display = 'inline-block';
   }
@@ -7946,7 +7946,7 @@ async function _autoBinaryVersionCheck() {
       latestEl.style.color = 'var(--accent-warn)';
       if (appSettings.live_update_enabled) applyWrap.classList.remove('hidden');
       const badge = document.getElementById('sidebar-update-badge');
-      if (badge) badge.classList.remove('hidden');
+      if (badge) { badge.textContent = '⬆ v' + data.latest; badge.classList.remove('hidden'); }
       if (dot) dot.style.display = 'inline-block';
     } else {
       latestEl.style.color = '';
