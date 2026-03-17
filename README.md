@@ -21,6 +21,8 @@ Most NAS management software are slow to install, slow to load, and buried under
 - **HTTPS on first launch** — a self-signed certificate is generated automatically. No manual certificate setup required.
 - **Guided setup wizard** — first-run installs missing system packages, registers a systemd service, detects existing ZFS pools, and creates your admin account. Start to finish in under five minutes.
 
+Version 5.0.0 Full End-To-End DEMO on Youtube: [Version 5.0.0 DEMO](https://youtu.be/usFcZ15AyOs?si=U-neyJLCjkAfNHMc)
+
 ![Demo](assets/zfsnas-v310-demo.gif)
 
 ---
