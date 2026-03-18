@@ -45,21 +45,16 @@ jobs:
           # Write private key from secret to a temp file
           printf '%s' "${{ secrets.CODE_SIGN_PRIVATE_KEY }}" > /tmp/cosign.key
 
-          # Compute SHA256 of the binary (hex only, no filename)
-          sha256sum dist/zfsnas-chezmoi | awk '{print $1}' > dist/zfsnas-chezmoi.sha256
-
-          # Sign the .sha256 file — the sig covers the hash, not the full binary
+          # Sign the binary directly
           /tmp/cosign sign-blob \
             --key /tmp/cosign.key \
             --output-signature dist/zfsnas-chezmoi.sig \
             --tlog-upload=false \
-            dist/zfsnas-chezmoi.sha256
+            dist/zfsnas-chezmoi
 
           # Clean up private key immediately
           rm -f /tmp/cosign.key
 
-          echo "=== SHA256 ==="
-          cat dist/zfsnas-chezmoi.sha256
           echo "=== Signature (base64) ==="
           cat dist/zfsnas-chezmoi.sig
 
@@ -68,7 +63,6 @@ jobs:
         with:
           files: |
             dist/zfsnas-chezmoi
-            dist/zfsnas-chezmoi.sha256
             dist/zfsnas-chezmoi.sig
           generate_release_notes: true
         env:
