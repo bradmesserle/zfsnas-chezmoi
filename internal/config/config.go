@@ -2,17 +2,75 @@ package config
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+	"zfsnas/internal/secret"
 )
+
+// ReplicationTask defines a ZFS send/receive replication job to a remote host.
+type ReplicationTask struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	SourceDataset string    `json:"source_dataset"` // full path: pool/dataset
+	RemoteHost    string    `json:"remote_host"`    // hostname or IP
+	RemoteUser    string    `json:"remote_user"`    // SSH user (default: root)
+	RemoteDataset string    `json:"remote_dataset"` // destination: pool/dataset
+	Recursive     bool      `json:"recursive"`      // -R flag: include child datasets
+	Compressed    bool      `json:"compressed"`     // -c flag: send compressed stream
+	LastSnap      string    `json:"last_snap,omitempty"`    // last successfully sent snapshot (for incremental)
+	LastRun       time.Time `json:"last_run,omitempty"`
+	LastStatus    string    `json:"last_status,omitempty"` // "ok", "error", "never"
+	LastMessage   string    `json:"last_message,omitempty"`
+}
 
 const (
 	RoleAdmin    = "admin"
 	RoleReadOnly = "read-only"
 	RoleSMBOnly  = "smb-only"
 )
+
+// ISCSIHost is a known initiator that can be granted access to iSCSI shares.
+type ISCSIHost struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	IQN     string `json:"iqn"`
+	Comment string `json:"comment"`
+}
+
+// ISCSICredential is a named CHAP authentication credential for iSCSI.
+type ISCSICredential struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Method      string `json:"method"`                // "incoming" or "bidirectional"
+	InUsername  string `json:"in_username"`           // initiator → target authentication
+	InPassword  string `json:"in_password"`
+	OutUsername string `json:"out_username,omitempty"` // target → initiator (bidirectional only)
+	OutPassword string `json:"out_password,omitempty"`
+}
+
+// ISCSIShare is a single exported iSCSI target backed by a ZVol.
+type ISCSIShare struct {
+	ID        string            `json:"id"`
+	ZVol      string            `json:"zvol"`
+	IQN       string            `json:"iqn"`
+	HostIDs   []string          `json:"host_ids"`
+	HostCreds map[string]string `json:"host_creds,omitempty"` // hostID → credID
+	Comment   string            `json:"comment"`
+	CreatedAt int64             `json:"created_at"`
+}
+
+// ISCSIConfig holds all persistent iSCSI settings.
+type ISCSIConfig struct {
+	Enabled     bool              `json:"enabled"`
+	BaseName    string            `json:"base_name"`
+	Port        int               `json:"port"`
+	Hosts       []ISCSIHost       `json:"hosts"`
+	Shares      []ISCSIShare      `json:"shares"`
+	Credentials []ISCSICredential `json:"credentials,omitempty"`
+}
 
 // AppConfig holds top-level application settings.
 type AppConfig struct {
@@ -25,8 +83,10 @@ type AppConfig struct {
 	ScrubHour         int       `json:"scrub_hour"`                    // hour of day to run scrub (0-23), default 2
 	LiveUpdateEnabled  bool   `json:"live_update_enabled,omitempty"`  // enable in-place binary self-update
 	MaxSmbdProcesses   int    `json:"max_smbd_processes,omitempty"`   // Samba max smbd processes (0 = use default 100)
-	TreeMapSchedule    string `json:"treemap_schedule,omitempty"`     // daily | weekly | biweekly | monthly | "" (off)
-	TreeMapHour        int    `json:"treemap_hour"`                   // hour of day to run treemap scan (0-23)
+	TreeMapSchedule    string      `json:"treemap_schedule,omitempty"`     // daily | weekly | biweekly | monthly | "" (off)
+	TreeMapHour        int         `json:"treemap_hour"`                   // hour of day to run treemap scan (0-23)
+	ISCSI              ISCSIConfig      `json:"iscsi,omitempty"`
+	Replication        []ReplicationTask `json:"replication,omitempty"`
 }
 
 // UserPreferences holds per-user UI preferences persisted across sessions.
@@ -77,12 +137,22 @@ func SaveEncryptionKeys(keys []EncryptionKey) error {
 var (
 	configDir string
 	mu        sync.RWMutex
+	totpKey   []byte // AES-256 key for TOTP secret encryption
 )
 
-// Init creates the config directory and stores its path.
+// Init creates the config directory, stores its path, and loads the TOTP encryption key.
 func Init(dir string) error {
 	configDir = dir
-	return os.MkdirAll(dir, 0750)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return err
+	}
+	key, err := secret.LoadOrCreateKey(filepath.Join(dir, "totp.key"))
+	if err != nil {
+		log.Printf("[config] warning: could not load/create TOTP key: %v — secrets stored unencrypted", err)
+	} else {
+		totpKey = key
+	}
+	return nil
 }
 
 // Dir returns the current config directory path.
@@ -136,6 +206,24 @@ func LoadAppConfig() (*AppConfig, error) {
 	if cfg.MaxSmbdProcesses == 0 {
 		cfg.MaxSmbdProcesses = 100
 	}
+	if cfg.ISCSI.BaseName == "" {
+		cfg.ISCSI.BaseName = "iqn.2003-06.ca.chezmoi.zfsnas"
+	}
+	if cfg.ISCSI.Port == 0 {
+		cfg.ISCSI.Port = 3260
+	}
+	if cfg.ISCSI.Hosts == nil {
+		cfg.ISCSI.Hosts = []ISCSIHost{}
+	}
+	if cfg.ISCSI.Shares == nil {
+		cfg.ISCSI.Shares = []ISCSIShare{}
+	}
+	if cfg.ISCSI.Credentials == nil {
+		cfg.ISCSI.Credentials = []ISCSICredential{}
+	}
+	if cfg.Replication == nil {
+		cfg.Replication = []ReplicationTask{}
+	}
 	// Migrate legacy WeeklyScrub bool to ScrubSchedule string.
 	if cfg.ScrubSchedule == "" {
 		if fresh {
@@ -182,7 +270,7 @@ func SaveAppConfig(cfg *AppConfig) error {
 	return saveJSON("config.json", cfg)
 }
 
-// LoadUsers loads all users from disk.
+// LoadUsers loads all users from disk, decrypting TOTP secrets if encrypted.
 func LoadUsers() ([]User, error) {
 	var users []User
 	if err := loadJSON("users.json", &users); err != nil {
@@ -191,12 +279,36 @@ func LoadUsers() ([]User, error) {
 	if users == nil {
 		users = []User{}
 	}
+	// Decrypt TOTP secrets. Legacy plaintext secrets are left as-is.
+	if totpKey != nil {
+		for i := range users {
+			if secret.IsEncrypted(users[i].TOTPSecret) {
+				if plain, err := secret.Decrypt(totpKey, users[i].TOTPSecret); err == nil {
+					users[i].TOTPSecret = plain
+				}
+			}
+		}
+	}
 	return users, nil
 }
 
-// SaveUsers persists all users to disk.
+// SaveUsers persists all users to disk, encrypting TOTP secrets if a key is available.
 func SaveUsers(users []User) error {
-	return saveJSON("users.json", users)
+	if totpKey == nil {
+		return saveJSON("users.json", users)
+	}
+	// Encrypt on a copy so we don't modify the caller's slice.
+	toWrite := make([]User, len(users))
+	copy(toWrite, users)
+	for i := range toWrite {
+		s := toWrite[i].TOTPSecret
+		if s != "" && !secret.IsEncrypted(s) {
+			if enc, err := secret.Encrypt(totpKey, s); err == nil {
+				toWrite[i].TOTPSecret = enc
+			}
+		}
+	}
+	return saveJSON("users.json", toWrite)
 }
 
 // FindUserByUsername returns the user with the given username, or nil.

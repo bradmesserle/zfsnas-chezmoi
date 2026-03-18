@@ -14,6 +14,7 @@ import (
 // appCfg is a pointer to the loaded application config (for settings handlers).
 func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *config.AppConfig) *mux.Router {
 	r := mux.NewRouter()
+	r.Use(EnforceOrigin)
 
 	// --- Static assets ---
 	r.PathPrefix("/static/").Handler(
@@ -131,6 +132,16 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 	r.Handle("/api/encryption/keys/{id}",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteKey)))).Methods("DELETE")
 
+	// --- ZVols ---
+	r.Handle("/api/zvols",
+		RequireAuth(http.HandlerFunc(HandleListZVols))).Methods("GET")
+	r.Handle("/api/zvol/create",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCreateZVol)))).Methods("POST")
+	r.Handle("/api/zvol/edit",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleEditZVol)))).Methods("POST")
+	r.Handle("/api/zvol/delete",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteZVol)))).Methods("POST")
+
 	// --- Datasets ---
 	r.Handle("/api/datasets",
 		RequireAuth(http.HandlerFunc(HandleListDatasets))).Methods("GET")
@@ -154,6 +165,8 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCloneSnapshot)))).Methods("POST")
 	r.Handle("/api/snapshots/delete",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteSnapshot)))).Methods("POST")
+	r.Handle("/api/snapshots/delete-all",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteAllSnapshots)))).Methods("POST")
 
 	// --- Disks ---
 	r.Handle("/api/disks",
@@ -240,6 +253,54 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteSchedule)))).Methods("DELETE")
 	r.Handle("/api/snapshot-schedules/{id}/run-now",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleRunScheduleNow)))).Methods("POST")
+
+	// --- iSCSI sharing ---
+	r.Handle("/api/iscsi/status",
+		RequireAuth(http.HandlerFunc(HandleISCSIStatus))).Methods("GET")
+	r.Handle("/api/iscsi/service",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleISCSIServiceAction)))).Methods("POST")
+	r.Handle("/api/iscsi/config",
+		RequireAuth(http.HandlerFunc(HandleGetISCSIConfig))).Methods("GET")
+	r.Handle("/api/iscsi/config",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSaveISCSIConfig)))).Methods("POST")
+	r.Handle("/api/iscsi/hosts",
+		RequireAuth(http.HandlerFunc(HandleListISCSIHosts))).Methods("GET")
+	r.Handle("/api/iscsi/host",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSaveISCSIHost)))).Methods("POST")
+	r.Handle("/api/iscsi/host/delete",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteISCSIHost)))).Methods("POST")
+	r.Handle("/api/iscsi/shares",
+		RequireAuth(http.HandlerFunc(HandleListISCSIShares))).Methods("GET")
+	r.Handle("/api/iscsi/share/create",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCreateISCSIShare)))).Methods("POST")
+	r.Handle("/api/iscsi/share/edit",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleEditISCSIShare)))).Methods("POST")
+	r.Handle("/api/iscsi/share/delete",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteISCSIShare)))).Methods("POST")
+	r.Handle("/api/iscsi/credentials",
+		RequireAuth(http.HandlerFunc(HandleListISCSICredentials))).Methods("GET")
+	r.Handle("/api/iscsi/credential",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleSaveISCSICredential)))).Methods("POST")
+	r.Handle("/api/iscsi/credential/delete",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteISCSICredential)))).Methods("POST")
+	r.Handle("/api/iscsi/sessions",
+		RequireAuth(http.HandlerFunc(HandleGetISCSISessions))).Methods("GET")
+
+	// --- Replication tasks (admin only) ---
+	r.Handle("/api/replication",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleListReplicationTasks)))).Methods("GET")
+	r.Handle("/api/replication",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCreateReplicationTask)))).Methods("POST")
+	r.Handle("/api/replication/{id}",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleEditReplicationTask)))).Methods("PUT")
+	r.Handle("/api/replication/{id}",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteReplicationTask)))).Methods("DELETE")
+	r.Handle("/ws/replication/{id}/run",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleRunReplicationTask)))).Methods("GET")
+
+	// --- Prerequisites: install optional packages (admin only) ---
+	r.Handle("/api/prereqs/install",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleInstallPackage)))).Methods("POST")
 
 	// --- NFS shares ---
 	r.Handle("/api/nfs/status",

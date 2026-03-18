@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"zfsnas/internal/audit"
@@ -152,6 +153,51 @@ func HandleCloneSnapshot(w http.ResponseWriter, r *http.Request) {
 	})
 
 	jsonOK(w, map[string]string{"message": "snapshot cloned to " + req.Target})
+}
+
+// HandleDeleteAllSnapshots deletes every snapshot belonging to the given dataset.
+func HandleDeleteAllSnapshots(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Dataset string `json:"dataset"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Dataset == "" {
+		jsonErr(w, http.StatusBadRequest, "dataset is required")
+		return
+	}
+
+	snaps, err := system.ListSnapshots(req.Dataset)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var deleted int
+	var lastErr error
+	for _, s := range snaps {
+		if s.Dataset != req.Dataset {
+			continue
+		}
+		if delErr := system.DestroySnapshot(s.Name); delErr != nil {
+			lastErr = delErr
+		} else {
+			deleted++
+		}
+	}
+	if lastErr != nil {
+		jsonErr(w, http.StatusInternalServerError, lastErr.Error())
+		return
+	}
+
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionDeleteSnapshot,
+		Target:  req.Dataset,
+		Result:  audit.ResultOK,
+		Details: fmt.Sprintf("deleted all %d snapshots", deleted),
+	})
+	jsonOK(w, map[string]interface{}{"deleted": deleted})
 }
 
 func HandleDeleteSnapshot(w http.ResponseWriter, r *http.Request) {

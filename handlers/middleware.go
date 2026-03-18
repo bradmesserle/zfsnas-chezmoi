@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
+	"strings"
 	"zfsnas/internal/config"
 	"zfsnas/internal/session"
 )
@@ -109,13 +111,31 @@ func RequireAuthOrAPIKey(next http.Handler) http.Handler {
 			token := auth[7:]
 			keys, _ := config.LoadAPIKeys()
 			for _, k := range keys {
-				if k.Key == token {
+				if subtle.ConstantTimeCompare([]byte(k.Key), []byte(token)) == 1 {
 					next.ServeHTTP(w, r)
 					return
 				}
 			}
 		}
 		jsonErr(w, http.StatusUnauthorized, "authentication required")
+	})
+}
+
+// EnforceOrigin rejects cross-origin state-changing requests (POST/PUT/DELETE/PATCH).
+// Requests without an Origin header (curl, scripts, API keys) are always allowed —
+// only browsers send Origin, and only for cross-origin requests.
+func EnforceOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
+			if origin := r.Header.Get("Origin"); origin != "" {
+				if !strings.HasSuffix(origin, "://"+r.Host) {
+					jsonErr(w, http.StatusForbidden, "cross-origin request rejected")
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

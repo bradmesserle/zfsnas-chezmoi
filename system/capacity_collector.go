@@ -71,6 +71,20 @@ func sampleCapacity(db *capacityrrd.DB, now time.Time) {
 			db.Record(pfx+"compratio", cr, now)
 		}
 	}
+
+	zvols, err := ListAllZVols()
+	if err != nil {
+		log.Printf("capacity: ListAllZVols: %v", err)
+		return
+	}
+	for _, z := range zvols {
+		pfx := "zv:" + z.Name + ":"
+		db.Record(pfx+"used", float64(z.Used), now)
+		db.Record(pfx+"size", float64(z.Size), now)
+		if cr := parseComprRatio(z.CompRatio); cr > 0 {
+			db.Record(pfx+"compratio", cr, now)
+		}
+	}
 }
 
 // parseComprRatio converts "1.24x" → 1.24; returns 0 on error or if value is ≤1.

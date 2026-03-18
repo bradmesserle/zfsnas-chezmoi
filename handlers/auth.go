@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -127,6 +128,17 @@ func HandleSetup(w http.ResponseWriter, r *http.Request) {
 
 // HandleLogin authenticates a user and creates a session.
 func HandleLogin(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+
+	// Rate limit check — before any DB access so brute-force is cheap to block.
+	if locked, retryAfter := loginLimiter.check(ip); locked {
+		secs := int(retryAfter.Seconds()) + 1
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", secs))
+		jsonErr(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many failed attempts — try again in %d seconds", secs))
+		return
+	}
+
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -142,9 +154,9 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := clientIP(r)
 	user := config.FindUserByUsername(users, strings.TrimSpace(req.Username))
 	if user == nil || user.Role == config.RoleSMBOnly {
+		loginLimiter.recordFailure(ip)
 		alerts.RecordFailedLogin()
 		audit.Log(audit.Entry{
 			User:    req.Username,
@@ -157,6 +169,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		loginLimiter.recordFailure(ip)
 		alerts.RecordFailedLogin()
 		audit.Log(audit.Entry{
 			User:    req.Username,
@@ -176,6 +189,8 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 			jsonErr(w, http.StatusInternalServerError, "failed to create pending session")
 			return
 		}
+		// Password was correct — reset failure count so TOTP step starts clean.
+		loginLimiter.recordSuccess(ip)
 		alerts.ResetFailedLogins()
 		jsonOK(w, map[string]interface{}{
 			"totp_required": true,
@@ -190,6 +205,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loginLimiter.recordSuccess(ip)
 	alerts.ResetFailedLogins()
 	audit.Log(audit.Entry{
 		User:    user.Username,
@@ -208,6 +224,16 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 // HandleTOTPLogin completes two-step login by verifying a TOTP code.
 func HandleTOTPLogin(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+
+	if locked, retryAfter := loginLimiter.check(ip); locked {
+		secs := int(retryAfter.Seconds()) + 1
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", secs))
+		jsonErr(w, http.StatusTooManyRequests,
+			fmt.Sprintf("too many failed attempts — try again in %d seconds", secs))
+		return
+	}
+
 	var req struct {
 		PendingToken string `json:"pending_token"`
 		Code         string `json:"code"`
@@ -236,12 +262,13 @@ func HandleTOTPLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !totp.Verify(user.TOTPSecret, strings.TrimSpace(req.Code)) {
+		loginLimiter.recordFailure(ip)
 		audit.Log(audit.Entry{
 			User:    pending.Username,
 			Role:    pending.Role,
 			Action:  audit.ActionLoginFailed,
 			Result:  audit.ResultError,
-			Details: "invalid TOTP code (from " + clientIP(r) + ")",
+			Details: "invalid TOTP code (from " + ip + ")",
 		})
 		jsonErr(w, http.StatusUnauthorized, "invalid authentication code")
 		return
@@ -253,12 +280,13 @@ func HandleTOTPLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loginLimiter.recordSuccess(ip)
 	audit.Log(audit.Entry{
 		User:    user.Username,
 		Role:    user.Role,
 		Action:  audit.ActionLogin,
 		Result:  audit.ResultOK,
-		Details: "2FA verified, from " + clientIP(r),
+		Details: "2FA verified, from " + ip,
 	})
 
 	SetSessionCookie(w, sess.Token)

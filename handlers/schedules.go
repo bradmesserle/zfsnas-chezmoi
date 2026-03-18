@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"zfsnas/internal/audit"
+	"zfsnas/internal/config"
 	"zfsnas/internal/scheduler"
 	"zfsnas/system"
 
@@ -105,9 +106,15 @@ func HandleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	found := false
 	for i, existing := range policies {
 		if existing.ID == id {
-			p.LastRun = existing.LastRun
-			p.LastStatus = existing.LastStatus
-			p.LastError = existing.LastError
+			// Preserve all runtime state — only config fields come from the request.
+			p.LastRun     = existing.LastRun
+			p.LastStatus  = existing.LastStatus
+			p.LastError   = existing.LastError
+			p.LastDetails = existing.LastDetails
+			p.LastRepStatus = existing.LastRepStatus
+			p.LastRepError  = existing.LastRepError
+			p.LastRepLog    = existing.LastRepLog
+			p.LastRepSnap   = existing.LastRepSnap
 			policies[i] = p
 			found = true
 			break
@@ -249,8 +256,9 @@ func execScheduledSnapshot(p *scheduler.Policy) error {
 		})
 		return err
 	}
-	p.LastStatus = "ok"
-	p.LastError = ""
+	p.LastStatus  = "ok"
+	p.LastError   = ""
+	p.LastDetails = "Snapshot: " + name
 	audit.Log(audit.Entry{
 		Action:  audit.ActionCreateSnapshot,
 		Target:  name,
@@ -260,6 +268,60 @@ func execScheduledSnapshot(p *scheduler.Policy) error {
 	if p.Retention > 0 {
 		pruneSnapshots(p.Dataset, label, p.Retention)
 	}
+
+	// Run remote replication if configured for this policy.
+	if p.ReplicationEnabled && p.ReplicationHost != "" && p.ReplicationDataset != "" {
+		task := &config.ReplicationTask{
+			ID:            p.ID + "-rep",
+			Name:          p.Dataset + " → " + p.ReplicationHost,
+			SourceDataset: p.Dataset,
+			RemoteHost:    p.ReplicationHost,
+			RemoteUser:    p.ReplicationUser,
+			RemoteDataset: p.ReplicationDataset,
+			Recursive:     p.ReplicationRecursive,
+			Compressed:    p.ReplicationCompressed,
+			LastSnap:      p.LastRepSnap, // enables incremental send on subsequent runs
+		}
+		var repLogBuf strings.Builder
+		var afterSep bool
+		collectLine := func(line string) {
+			log.Printf("[replication] %s: %s", p.ID, line)
+			if strings.Contains(line, "─────") {
+				afterSep = true
+				return
+			}
+			if afterSep {
+				repLogBuf.WriteString(line)
+				repLogBuf.WriteByte('\n')
+			}
+		}
+		if repSnap, repErr := system.RunReplication(task, collectLine, name); repErr != nil {
+			log.Printf("[replication] policy %s replication failed: %v", p.ID, repErr)
+			p.LastDetails   = "Snapshot ok · Replication failed: " + repErr.Error()
+			p.LastRepStatus = "error"
+			p.LastRepError  = repErr.Error()
+			p.LastRepLog    = repLogBuf.String()
+			audit.Log(audit.Entry{
+				Action:  audit.ActionRunReplication,
+				Target:  p.Dataset,
+				Result:  audit.ResultError,
+				Details: fmt.Sprintf("scheduled policy %s: %v", p.ID, repErr),
+			})
+		} else {
+			p.LastDetails   = "Snapshot: " + name + " · Replication: ok"
+			p.LastRepStatus = "ok"
+			p.LastRepError  = ""
+			p.LastRepLog    = repLogBuf.String()
+			p.LastRepSnap   = repSnap // persist for incremental send next time
+			audit.Log(audit.Entry{
+				Action:  audit.ActionRunReplication,
+				Target:  p.Dataset,
+				Result:  audit.ResultOK,
+				Details: fmt.Sprintf("scheduled policy %s", p.ID),
+			})
+		}
+	}
+
 	return nil
 }
 

@@ -13,6 +13,7 @@
   --accent-4:    #30d158;
   --accent-warn: #ffd60a;
   --accent-danger:#ff453a;
+  --zvol-color:  #64d2ff;
 
   --gradient:    linear-gradient(135deg, var(--accent-1), var(--accent-2));
   --gradient-full: linear-gradient(135deg, #bf5af2, #0a84ff, #32d74b);
@@ -42,6 +43,7 @@ body.light {
   --shadow:      0 4px 24px rgba(0, 0, 0, 0.10);
   --shadow-lg:   0 8px 40px rgba(0, 0, 0, 0.18);
   --accent-warn: #d4a017;
+  --zvol-color:  #0071a8;
 }
 body.light .badge-smbonly { background: rgba(212,160,23,0.15); color: #d4a017; }
 
@@ -657,6 +659,11 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 }
 
 /* ===== Prereqs Modal ===== */
+#prereq-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  column-gap: 32px;
+}
 .prereq-row {
   display: flex;
   align-items: center;
@@ -665,7 +672,6 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   border-bottom: 1px solid var(--border);
   font-size: 14px;
 }
-.prereq-row:last-child { border-bottom: none; }
 .prereq-name { font-weight: 600; }
 .prereq-desc { font-size: 12px; color: var(--text-2); margin-top: 2px; }
 
@@ -820,3 +826,7 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .row-menu-dropdown .menu-sep {
   border: none; border-top: 1px solid var(--border); margin: 3px 0;
 }
+
+/* iSCSI SVG icon — invert for dark theme (SVG has dark strokes) */
+.iscsi-icon { width: 16px; height: 16px; display: inline-block; vertical-align: middle; filter: invert(1) brightness(1.2); }
+body.light .iscsi-icon { filter: none; }

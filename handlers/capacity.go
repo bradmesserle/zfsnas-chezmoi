@@ -8,9 +8,9 @@ import (
 	"zfsnas/system"
 )
 
-// HandleCapacitySeries returns metadata about all currently active pools and
-// datasets. Used by the frontend to populate the selector panel.
-// Response: { pools: [{key, name, usable}], datasets: [{key, name, pool}] }
+// HandleCapacitySeries returns metadata about all currently active pools,
+// datasets, and zvols. Used by the frontend to populate the selector panel.
+// Response: { pools: [{key, name, usable}], datasets: [{key, name, pool}], zvols: [{key, name, pool, used, size}] }
 func HandleCapacitySeries(w http.ResponseWriter, r *http.Request) {
 	pools, err := system.GetAllPools()
 	if err != nil {
@@ -29,6 +29,13 @@ func HandleCapacitySeries(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 		Pool string `json:"pool"`
 		Used uint64 `json:"used"`
+	}
+	type zvolMeta struct {
+		Key  string `json:"key"`
+		Name string `json:"name"`
+		Pool string `json:"pool"`
+		Used uint64 `json:"used"`
+		Size uint64 `json:"size"`
 	}
 
 	poolList := make([]poolMeta, 0, len(pools))
@@ -49,7 +56,6 @@ func HandleCapacitySeries(w http.ResponseWriter, r *http.Request) {
 
 	dsList := make([]dsMeta, 0, len(datasets))
 	for _, d := range datasets {
-		// Determine parent pool name from the dataset name (first path component).
 		poolName := d.Name
 		if idx := strings.IndexByte(d.Name, '/'); idx >= 0 {
 			poolName = d.Name[:idx]
@@ -62,9 +68,22 @@ func HandleCapacitySeries(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	zvols, _ := system.ListAllZVols()
+	zvolList := make([]zvolMeta, 0, len(zvols))
+	for _, z := range zvols {
+		zvolList = append(zvolList, zvolMeta{
+			Key:  "zv:" + z.Name,
+			Name: z.Name,
+			Pool: z.Pool,
+			Used: z.Used,
+			Size: z.Size,
+		})
+	}
+
 	jsonOK(w, map[string]interface{}{
 		"pools":    poolList,
 		"datasets": dsList,
+		"zvols":    zvolList,
 	})
 }
 

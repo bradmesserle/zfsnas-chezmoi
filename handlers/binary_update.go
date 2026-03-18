@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,12 +40,12 @@ func parseSemver(v string) [3]int {
 	return out
 }
 
-// HandleCheckBinaryUpdate checks GitHub for a newer release.
+// HandleCheckBinaryUpdate checks GitHub for a newer release and verifies its signature.
 // Version checking is always allowed regardless of LiveUpdateEnabled.
 // GET /api/binary-update/check
 func HandleCheckBinaryUpdate(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tag, dlURL, err := updater.CheckLatest()
+		info, err := updater.CheckLatest()
 		if err != nil {
 			if system.DebugMode {
 				log.Printf("[debug] binary-update/check: CheckLatest error: %v", err)
@@ -52,24 +53,39 @@ func HandleCheckBinaryUpdate(appCfg *config.AppConfig) http.HandlerFunc {
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		latest := strings.TrimPrefix(tag, "v")
+		latest := strings.TrimPrefix(info.Tag, "v")
 		current := version.Version
 		updateAvailable := semverGreater(latest, current)
+
+		// Verify the release signature (downloads two tiny files: .sha256 + .sig).
+		sigValid := false
+		sigError := ""
+		if valid, err := updater.VerifyRelease(info); err != nil {
+			sigError = err.Error()
+			if system.DebugMode {
+				log.Printf("[debug] binary-update/check: VerifyRelease error: %v", err)
+			}
+		} else {
+			sigValid = valid
+		}
+
 		if system.DebugMode {
-			log.Printf("[debug] binary-update/check: current=%s latest=%s update_available=%v download_url=%q",
-				current, latest, updateAvailable, dlURL)
+			log.Printf("[debug] binary-update/check: current=%s latest=%s update_available=%v sig_valid=%v",
+				current, latest, updateAvailable, sigValid)
 		}
 		jsonOK(w, map[string]interface{}{
 			"current":          current,
 			"latest":           latest,
 			"update_available": updateAvailable,
-			"download_url":     dlURL,
+			"download_url":     info.DownloadURL,
+			"sig_valid":        sigValid,
+			"sig_error":        sigError,
 		})
 	}
 }
 
-// HandleBinaryUpdateApply streams the update progress over WebSocket, then
-// atomically replaces the binary and calls syscall.Exec to restart in-place.
+// HandleBinaryUpdateApply streams the update progress over WebSocket, verifies
+// the binary hash, then atomically replaces the binary and calls syscall.Exec to restart.
 // WS /ws/binary-update-apply
 func HandleBinaryUpdateApply(appCfg *config.AppConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -97,18 +113,28 @@ func HandleBinaryUpdateApply(appCfg *config.AppConfig) http.HandlerFunc {
 			}))
 		}
 
-		send("Step 1/4: Fetching release info from GitHub…")
-		tag, dlURL, err := updater.CheckLatest()
+		send("Step 1/5: Fetching release info from GitHub…")
+		info, err := updater.CheckLatest()
 		if err != nil {
 			done(false, "fetch release info failed: "+err.Error())
 			return
 		}
-		latest := strings.TrimPrefix(tag, "v")
+		latest := strings.TrimPrefix(info.Tag, "v")
 		if !semverGreater(latest, version.Version) {
 			done(true, "already up to date (v"+version.Version+")")
 			return
 		}
 		send("Latest release: v" + latest + "  (current: v" + version.Version + ")")
+
+		send("Step 2/5: Verifying release signature…")
+		if valid, err := updater.VerifyRelease(info); err != nil {
+			done(false, "signature verification failed: "+err.Error())
+			return
+		} else if !valid {
+			done(false, "signature verification failed: signature does not match release key")
+			return
+		}
+		send("Signature valid ✓")
 
 		exePath, err := updater.ExePath()
 		if err != nil {
@@ -117,20 +143,28 @@ func HandleBinaryUpdateApply(appCfg *config.AppConfig) http.HandlerFunc {
 		}
 		destDir := filepath.Dir(exePath)
 
-		send("Step 2/4: Downloading binary to " + destDir + "…")
-		tmpPath, err := updater.Download(dlURL, destDir)
+		send("Step 3/5: Downloading binary to " + destDir + "…")
+		tmpPath, err := updater.Download(info.DownloadURL, destDir)
 		if err != nil {
 			done(false, "download failed: "+err.Error())
 			return
 		}
 
-		send("Step 3/4: Replacing binary at " + exePath + "…")
+		send("Step 4/5: Verifying binary signature…")
+		if err := updater.VerifyDownloadedBinary(tmpPath, info.SigURL); err != nil {
+			os.Remove(tmpPath)
+			done(false, "signature verification failed: "+err.Error())
+			return
+		}
+		send("Signature verified ✓")
+
+		send("Step 5/5: Replacing binary at " + exePath + "…")
 		if err := updater.Replace(tmpPath, exePath); err != nil {
 			done(false, "replace failed: "+err.Error())
 			return
 		}
 
-		send("Step 4/4: Restarting process…")
+		send("Restarting process…")
 		conn.WriteMessage(websocket.TextMessage, mustJSON(map[string]interface{}{
 			"done":    true,
 			"success": true,

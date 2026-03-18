@@ -1,8 +1,14 @@
-// Package updater implements GitHub release checking and binary self-update.
+// Package updater implements GitHub release checking, signature verification,
+// and binary self-update.
 package updater
 
 import (
+	"crypto/ecdsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,16 +21,22 @@ import (
 
 const repoAPI = "https://api.github.com/repos/macgaver/zfsnas-chezmoi/releases/latest"
 
-// CheckLatest calls the GitHub Releases API and returns the latest tag and
-// the download URL for the asset matching the current OS/architecture.
-func CheckLatest() (tag, downloadURL string, err error) {
+// ReleaseInfo holds the result of CheckLatest.
+type ReleaseInfo struct {
+	Tag         string
+	DownloadURL string
+	SigURL      string // URL of the .sig file (cosign signature of the binary)
+}
+
+// CheckLatest calls the GitHub Releases API and returns the latest release info.
+func CheckLatest() (ReleaseInfo, error) {
 	resp, err := http.Get(repoAPI)
 	if err != nil {
-		return "", "", fmt.Errorf("github API: %w", err)
+		return ReleaseInfo{}, fmt.Errorf("github API: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("github API returned status %d", resp.StatusCode)
+		return ReleaseInfo{}, fmt.Errorf("github API returned status %d", resp.StatusCode)
 	}
 
 	var release struct {
@@ -35,30 +47,129 @@ func CheckLatest() (tag, downloadURL string, err error) {
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", "", fmt.Errorf("decode response: %w", err)
+		return ReleaseInfo{}, fmt.Errorf("decode response: %w", err)
 	}
 
-	tag = release.TagName
-	// Match the asset by OS + architecture suffix, e.g. "zfsnas-linux-amd64".
-	// Fall back to any asset containing the binary name "zfsnas".
+	info := ReleaseInfo{Tag: release.TagName}
 	suffix := "linux-" + runtime.GOARCH
+
 	for _, a := range release.Assets {
-		if strings.Contains(a.Name, suffix) {
-			downloadURL = a.BrowserDownloadURL
-			break
+		name := a.Name
+		switch {
+		case strings.HasSuffix(name, ".sig"):
+			info.SigURL = a.BrowserDownloadURL
+		case strings.Contains(name, suffix):
+			info.DownloadURL = a.BrowserDownloadURL
 		}
 	}
-	if downloadURL == "" {
+	// Fallback: any asset containing "zfsnas" that isn't a .sig
+	if info.DownloadURL == "" {
 		for _, a := range release.Assets {
-			if strings.Contains(strings.ToLower(a.Name), "zfsnas") {
-				downloadURL = a.BrowserDownloadURL
+			n := strings.ToLower(a.Name)
+			if strings.Contains(n, "zfsnas") && !strings.HasSuffix(n, ".sig") {
+				info.DownloadURL = a.BrowserDownloadURL
 				break
 			}
 		}
 	}
-	// Not finding a download asset is non-fatal for a version check — the caller
-	// can decide whether to offer an update based on update_available alone.
-	return tag, downloadURL, nil
+	return info, nil
+}
+
+// VerifyRelease downloads the binary and its .sig, then verifies the signature
+// against the embedded public key. Returns (true, nil) when valid.
+func VerifyRelease(info ReleaseInfo) (bool, error) {
+	if strings.TrimSpace(cosignPublicKey) == "" {
+		return false, fmt.Errorf("no signing key configured in binary")
+	}
+	if info.SigURL == "" || info.DownloadURL == "" {
+		return false, fmt.Errorf("release has no signature asset")
+	}
+
+	// Download the .sig file (base64-encoded DER ECDSA signature, ~100 bytes).
+	sigB64, err := downloadText(info.SigURL)
+	if err != nil {
+		return false, fmt.Errorf("download sig: %w", err)
+	}
+	sigBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(sigB64))
+	if err != nil {
+		return false, fmt.Errorf("decode sig: %w", err)
+	}
+
+	// Parse the embedded public key.
+	block, _ := pem.Decode([]byte(cosignPublicKey))
+	if block == nil {
+		return false, fmt.Errorf("invalid public key PEM")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return false, fmt.Errorf("parse public key: %w", err)
+	}
+	ecPub, ok := pub.(*ecdsa.PublicKey)
+	if !ok {
+		return false, fmt.Errorf("public key is not ECDSA")
+	}
+
+	// Stream-download the binary and compute its SHA256 on the fly.
+	resp, err := http.Get(info.DownloadURL)
+	if err != nil {
+		return false, fmt.Errorf("download binary: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("download binary: HTTP %d", resp.StatusCode)
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, resp.Body); err != nil {
+		return false, fmt.Errorf("hash binary: %w", err)
+	}
+	digest := h.Sum(nil)
+
+	return ecdsa.VerifyASN1(ecPub, digest, sigBytes), nil
+}
+
+// VerifyDownloadedBinary verifies the signature of an already-downloaded binary
+// at path against the .sig at sigURL.
+func VerifyDownloadedBinary(path, sigURL string) error {
+	if strings.TrimSpace(cosignPublicKey) == "" {
+		return fmt.Errorf("no signing key configured in binary")
+	}
+
+	sigB64, err := downloadText(sigURL)
+	if err != nil {
+		return fmt.Errorf("download sig: %w", err)
+	}
+	sigBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(sigB64))
+	if err != nil {
+		return fmt.Errorf("decode sig: %w", err)
+	}
+
+	block, _ := pem.Decode([]byte(cosignPublicKey))
+	if block == nil {
+		return fmt.Errorf("invalid public key PEM")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("parse public key: %w", err)
+	}
+	ecPub, ok := pub.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("public key is not ECDSA")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+
+	if !ecdsa.VerifyASN1(ecPub, h.Sum(nil), sigBytes) {
+		return fmt.Errorf("signature invalid: binary does not match release key")
+	}
+	return nil
 }
 
 // Download streams the binary at url into a temporary file inside destDir.
@@ -97,7 +208,6 @@ func Download(url, destDir string) (string, error) {
 }
 
 // Replace atomically replaces destPath with the file at tmpPath.
-// Both paths must be on the same filesystem for the rename to be atomic.
 func Replace(tmpPath, destPath string) error {
 	return os.Rename(tmpPath, destPath)
 }
@@ -115,4 +225,21 @@ func ExePath() (string, error) {
 		return "", err
 	}
 	return filepath.EvalSymlinks(exe)
+}
+
+// downloadText fetches a URL and returns its body as a string.
+func downloadText(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }

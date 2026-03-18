@@ -20,9 +20,24 @@ type Policy struct {
 	Retention  int       `json:"retention"`     // keep last N auto-snapshots
 	Label      string    `json:"label"`         // prefix for snapshot names (e.g. "auto")
 	Enabled    bool      `json:"enabled"`
-	LastRun    time.Time `json:"last_run,omitempty"`
-	LastStatus string    `json:"last_status,omitempty"` // "ok" | "error" | ""
-	LastError  string    `json:"last_error,omitempty"`
+	LastRun     time.Time `json:"last_run,omitempty"`
+	LastStatus  string    `json:"last_status,omitempty"`  // "ok" | "error" | ""
+	LastError   string    `json:"last_error,omitempty"`
+	LastDetails string    `json:"last_details,omitempty"` // human-readable summary of last run
+
+	// Replication run state (populated when ReplicationEnabled).
+	LastRepStatus string `json:"last_rep_status,omitempty"` // "ok" | "error" | ""
+	LastRepError  string `json:"last_rep_error,omitempty"`  // short error description
+	LastRepLog    string `json:"last_rep_log,omitempty"`    // stdout/stderr after the separator line
+	LastRepSnap   string `json:"last_rep_snap,omitempty"`   // snap suffix of last successful replication
+
+	// Optional remote replication — runs after each successful snapshot.
+	ReplicationEnabled    bool   `json:"replication_enabled,omitempty"`
+	ReplicationHost       string `json:"replication_host,omitempty"`
+	ReplicationUser       string `json:"replication_user,omitempty"`
+	ReplicationDataset    string `json:"replication_dataset,omitempty"`
+	ReplicationRecursive  bool   `json:"replication_recursive,omitempty"`
+	ReplicationCompressed bool   `json:"replication_compressed,omitempty"`
 }
 
 var (
@@ -73,6 +88,9 @@ func SavePolicies(policies []Policy) error {
 
 // IsDue returns true when policy p should fire at time now (checked per minute).
 func IsDue(p Policy, now time.Time) bool {
+	if p.Frequency == "manual" {
+		return false
+	}
 	switch p.Frequency {
 	case "hourly":
 		return now.Minute() == p.Minute
@@ -89,6 +107,9 @@ func IsDue(p Policy, now time.Time) bool {
 
 // NextRun computes the next scheduled fire time for p after from.
 func NextRun(p Policy, from time.Time) time.Time {
+	if p.Frequency == "manual" {
+		return time.Time{}
+	}
 	loc := from.Location()
 	switch p.Frequency {
 	case "hourly":

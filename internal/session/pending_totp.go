@@ -22,6 +22,23 @@ var (
 	pendingTOTP = map[string]*PendingTOTP{}
 )
 
+func init() {
+	go func() {
+		t := time.NewTicker(pendingTOTPDuration)
+		defer t.Stop()
+		for range t.C {
+			now := time.Now()
+			pendingMu.Lock()
+			for token, p := range pendingTOTP {
+				if now.After(p.ExpiresAt) {
+					delete(pendingTOTP, token)
+				}
+			}
+			pendingMu.Unlock()
+		}
+	}()
+}
+
 // CreatePendingTOTP generates a short-lived (5-min) pending token for two-step login.
 func CreatePendingTOTP(userID, username, role string) (string, error) {
 	b := make([]byte, 32)

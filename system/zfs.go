@@ -1708,3 +1708,248 @@ func formatBytesShort(b uint64) string {
 	}
 	return fmt.Sprintf("%d", b)
 }
+
+// ── ZVol ──────────────────────────────────────────────────────────────────────
+
+// ZVol represents a ZFS volume (block device).
+type ZVol struct {
+	Name           string `json:"name"`
+	Pool           string `json:"pool"`
+	Size           uint64 `json:"size"`           // volsize in bytes
+	Used           uint64 `json:"used"`
+	Refer          uint64 `json:"refer"`
+	Refreservation uint64 `json:"refreservation"` // 0 = none/thin
+	Compression    string `json:"compression"`
+	CompRatio      string `json:"comp_ratio"`
+	Sync           string `json:"sync"`
+	Dedup          string `json:"dedup"`
+	VolBlockSize   string `json:"volblocksize"`
+	Encrypted      bool   `json:"encrypted"`
+	Comment        string `json:"comment"`
+	DevPath        string `json:"dev_path"` // /dev/zvol/<name>
+}
+
+// ZVolCreateRequest holds all parameters for creating a new ZVol.
+type ZVolCreateRequest struct {
+	Parent      string `json:"parent"`      // pool or pool/dataset path
+	Name        string `json:"name"`        // leaf name
+	Size        string `json:"size"`        // e.g. "10G", "500M"
+	Comment     string `json:"comment"`
+	Provisioning string `json:"provisioning"` // "thick"|"thin"|"25"|"50"|"75"
+	Sync        string `json:"sync"`        // "" = inherit
+	Compression string `json:"compression"` // "" = inherit
+	Dedup       string `json:"dedup"`       // "" = inherit
+	BlockSize   string `json:"block_size"`  // "" = inherit; "4K", "8K", etc.
+	Encryption  string `json:"encryption"`  // "" = inherit, "enabled"
+	KeyFilePath string `json:"key_file_path"` // required when Encryption="enabled"
+}
+
+// ZVolEditRequest holds the mutable properties for editing a ZVol.
+type ZVolEditRequest struct {
+	Name            string `json:"name"`
+	Comment         string `json:"comment"`
+	Provisioning    string `json:"provisioning"`    // "thick"|"thin"|"25"|"50"|"75"
+	VolSizeBytes    uint64 `json:"vol_size_bytes"`  // current volsize, required for % provisioning
+	NewVolSizeBytes uint64 `json:"new_vol_size_bytes"` // if >0 and >= VolSizeBytes, grow the volume
+	Sync         string `json:"sync"`
+	Compression  string `json:"compression"`
+	Dedup        string `json:"dedup"`
+}
+
+// ListAllZVols returns all ZFS volumes across all imported pools.
+func ListAllZVols() ([]ZVol, error) {
+	out, err := exec.Command("sudo", "zfs", "list",
+		"-t", "volume",
+		"-H", "-p",
+		"-o", "name,volsize,used,refer,compression,compressratio,sync,dedup,volblocksize,encryption,zfsnas:comment,refreservation",
+	).Output()
+	if err != nil {
+		// No volumes is not an error — zfs list exits non-zero when there are no results.
+		return []ZVol{}, nil
+	}
+	var zvols []ZVol
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		zv, err := parseZVolLine(line)
+		if err != nil {
+			debugLog("zvol parse error: %v", err)
+			continue
+		}
+		zvols = append(zvols, zv)
+	}
+	return zvols, nil
+}
+
+func parseZVolLine(line string) (ZVol, error) {
+	f := strings.Split(line, "\t")
+	if len(f) < 11 {
+		return ZVol{}, fmt.Errorf("unexpected zvol output: %q", line)
+	}
+	name := f[0]
+	size, _ := strconv.ParseUint(f[1], 10, 64)
+	used, _ := strconv.ParseUint(f[2], 10, 64)
+	refer, _ := strconv.ParseUint(f[3], 10, 64)
+	compression := f[4]
+	compRatio := f[5]
+	sync := f[6]
+	dedup := f[7]
+	volBlockSize := f[8]
+	encrypted := f[9] != "off" && f[9] != "-"
+	comment := f[10]
+	if comment == "-" {
+		comment = ""
+	}
+	var refreservation uint64
+	if len(f) >= 12 {
+		refreservation, _ = strconv.ParseUint(f[11], 10, 64)
+	}
+	pool := strings.SplitN(name, "/", 2)[0]
+	return ZVol{
+		Name:           name,
+		Pool:           pool,
+		Size:           size,
+		Used:           used,
+		Refer:          refer,
+		Refreservation: refreservation,
+		Compression:    compression,
+		CompRatio:      compRatio,
+		Sync:           sync,
+		Dedup:          dedup,
+		VolBlockSize:   volBlockSize,
+		Encrypted:      encrypted,
+		Comment:        comment,
+		DevPath:        "/dev/zvol/" + name,
+	}, nil
+}
+
+// parseVolSizeBytes parses a human size string like "10G", "500M", "2T", "100K"
+// into bytes. Case-insensitive suffix; no suffix = bytes.
+func parseVolSizeBytes(s string) (uint64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty size string")
+	}
+	suffixes := map[byte]uint64{
+		'K': 1 << 10, 'k': 1 << 10,
+		'M': 1 << 20, 'm': 1 << 20,
+		'G': 1 << 30, 'g': 1 << 30,
+		'T': 1 << 40, 't': 1 << 40,
+		'P': 1 << 50, 'p': 1 << 50,
+	}
+	last := s[len(s)-1]
+	if mult, ok := suffixes[last]; ok {
+		n, err := strconv.ParseUint(s[:len(s)-1], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid size %q: %w", s, err)
+		}
+		return n * mult, nil
+	}
+	return strconv.ParseUint(s, 10, 64)
+}
+
+// CreateZVol creates a new ZFS volume with the given options.
+func CreateZVol(req ZVolCreateRequest) error {
+	fullName := req.Parent + "/" + req.Name
+	args := []string{"zfs", "create", "-V", req.Size}
+	if req.KeyFilePath != "" {
+		args = append(args,
+			"-o", "encryption=aes-256-gcm",
+			"-o", "keyformat=raw",
+			"-o", "keylocation=file://"+req.KeyFilePath,
+		)
+	}
+	// Do NOT set refreservation during create — ZFS computes it before all
+	// properties (block size, compression) are resolved, which can over-estimate
+	// the required space and fail with ENOSPC even when the pool has room.
+	// We apply refreservation in a separate "zfs set" after creation.
+	if req.Compression != "" && req.Compression != "inherit" {
+		args = append(args, "-o", "compression="+req.Compression)
+	}
+	if req.Sync != "" && req.Sync != "inherit" {
+		args = append(args, "-o", "sync="+req.Sync)
+	}
+	if req.Dedup != "" && req.Dedup != "inherit" {
+		args = append(args, "-o", "dedup="+req.Dedup)
+	}
+	if req.BlockSize != "" && req.BlockSize != "inherit" {
+		args = append(args, "-o", "volblocksize="+req.BlockSize)
+	}
+	args = append(args, fullName)
+	debugLog("zfs create zvol: %v", args)
+	out, err := exec.Command("sudo", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+
+	// Apply refreservation after creation so ZFS has the final block size and
+	// compression settings when computing the reservation value.
+	var refreservation string
+	switch req.Provisioning {
+	case "thick":
+		refreservation = "auto"
+	case "thin":
+		refreservation = "none"
+	case "25", "50", "75":
+		if sizeBytes, err := parseVolSizeBytes(req.Size); err == nil && sizeBytes > 0 {
+			pct, _ := strconv.ParseUint(req.Provisioning, 10, 64)
+			refreservation = fmt.Sprintf("%d", sizeBytes*pct/100)
+		}
+	}
+	if refreservation != "" {
+		if out, serr := exec.Command("sudo", "zfs", "set", "refreservation="+refreservation, fullName).CombinedOutput(); serr != nil {
+			// Best-effort: log but don't fail the whole creation.
+			debugLog("zvol set refreservation=%s failed: %v: %s", refreservation, serr, strings.TrimSpace(string(out)))
+		}
+	}
+
+	if req.Comment != "" {
+		if serr := SetDatasetProps(fullName, map[string]string{"zfsnas:comment": req.Comment}); serr != nil {
+			debugLog("zvol set comment failed: %v", serr)
+		}
+	}
+	return nil
+}
+
+// EditZVol updates mutable properties on an existing ZVol.
+func EditZVol(req ZVolEditRequest) error {
+	props := map[string]string{}
+	if req.Compression != "" {
+		props["compression"] = req.Compression
+	}
+	if req.Sync != "" {
+		props["sync"] = req.Sync
+	}
+	if req.Dedup != "" {
+		props["dedup"] = req.Dedup
+	}
+	// Provisioning → refreservation
+	switch req.Provisioning {
+	case "thick":
+		props["refreservation"] = "auto"
+	case "thin":
+		props["refreservation"] = "none"
+	case "25", "50", "75":
+		if req.VolSizeBytes > 0 {
+			pct, _ := strconv.ParseUint(req.Provisioning, 10, 64)
+			props["refreservation"] = fmt.Sprintf("%d", req.VolSizeBytes*pct/100)
+		}
+	}
+	// Grow the volume if a larger size was requested. ZFS rejects shrinks.
+	if req.NewVolSizeBytes > 0 && req.NewVolSizeBytes >= req.VolSizeBytes {
+		props["volsize"] = fmt.Sprintf("%d", req.NewVolSizeBytes)
+	}
+	// Comment: always include it (empty string → inherit/clear via SetDatasetProps).
+	props["zfsnas:comment"] = strings.TrimSpace(req.Comment)
+	return SetDatasetProps(req.Name, props)
+}
+
+// DeleteZVol destroys a ZVol and all its snapshots.
+func DeleteZVol(name string) error {
+	out, err := exec.Command("sudo", "zfs", "destroy", "-r", name).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}

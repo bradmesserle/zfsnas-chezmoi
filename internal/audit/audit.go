@@ -79,6 +79,21 @@ const (
 	ActionDeleteKey   = "delete_key"
 	ActionLoadKey     = "load_key"
 	ActionUnloadKey   = "unload_key"
+	// ZVol events.
+	ActionCreateZVol = "create_zvol"
+	ActionEditZVol   = "edit_zvol"
+	ActionDeleteZVol = "delete_zvol"
+	// iSCSI events.
+	ActionEditISCSIConfig       = "edit_iscsi_config"
+	ActionCreateISCSIShare      = "create_iscsi_share"
+	ActionDeleteISCSIShare      = "delete_iscsi_share"
+	ActionCreateISCSICredential = "create_iscsi_credential"
+	ActionDeleteISCSICredential = "delete_iscsi_credential"
+	// Replication events.
+	ActionCreateReplication = "create_replication"
+	ActionEditReplication   = "edit_replication"
+	ActionDeleteReplication = "delete_replication"
+	ActionRunReplication    = "run_replication"
 )
 
 var (

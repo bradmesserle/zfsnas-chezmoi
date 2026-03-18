@@ -291,11 +291,14 @@ func EnsureSambaUser(username, password string) error {
 	return nil
 }
 
-// ChmodSharePath sets permissions on a share path to 0777 so SMB clients can
-// read and write regardless of the original dataset ownership.
+// ChmodSharePath sets permissions on a share path so SMB clients can read and
+// write via the sambashare group. It recursively chgrps the tree to sambashare
+// and sets 0770 (owner+group full access, no world access).
 func ChmodSharePath(path string) error {
-	out, err := exec.Command("sudo", "chmod", "777", path).CombinedOutput()
-	if err != nil {
+	if out, err := exec.Command("sudo", "chgrp", "-R", "sambashare", path).CombinedOutput(); err != nil {
+		return fmt.Errorf("chgrp %s: %s", path, strings.TrimSpace(string(out)))
+	}
+	if out, err := exec.Command("sudo", "chmod", "-R", "0770", path).CombinedOutput(); err != nil {
 		return fmt.Errorf("chmod %s: %s", path, strings.TrimSpace(string(out)))
 	}
 	return nil

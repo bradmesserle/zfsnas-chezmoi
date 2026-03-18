@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/smtp"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
+	"zfsnas/internal/secret"
 )
 
 // SMTPConfig holds SMTP connection parameters.
@@ -50,11 +52,19 @@ var (
 	configDir    string
 	mu           sync.RWMutex
 	failedLogins int64
+	smtpKey      []byte // AES-256 key for SMTP password encryption
 )
 
-// Init sets the config directory.
+// Init sets the config directory and loads (or creates) the SMTP encryption key.
 func Init(dir string) {
 	configDir = dir
+	keyPath := filepath.Join(dir, "smtp.key")
+	key, err := secret.LoadOrCreateKey(keyPath)
+	if err != nil {
+		log.Printf("[alerts] warning: could not load/create SMTP key: %v — password will be stored unencrypted", err)
+		return
+	}
+	smtpKey = key
 }
 
 func defaultConfig() *AlertConfig {
@@ -74,6 +84,8 @@ func defaultConfig() *AlertConfig {
 }
 
 // Load reads alert config from disk, returning defaults if the file does not exist.
+// If the SMTP password is encrypted, it is decrypted in the returned struct so
+// callers (e.g. the SMTP sender) always receive the plaintext value.
 func Load() (*AlertConfig, error) {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -89,15 +101,34 @@ func Load() (*AlertConfig, error) {
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
+	// Decrypt SMTP password if encrypted, silently keep plaintext for legacy configs.
+	if smtpKey != nil && secret.IsEncrypted(cfg.SMTP.Password) {
+		if plain, err := secret.Decrypt(smtpKey, cfg.SMTP.Password); err == nil {
+			cfg.SMTP.Password = plain
+		}
+	}
 	return cfg, nil
 }
 
-// Save persists alert config to disk.
+// Save persists alert config to disk, encrypting the SMTP password if a key is available.
+// If the password is already an encrypted blob (e.g. copied from an existing config),
+// it is written as-is without double-encrypting.
 func Save(cfg *AlertConfig) error {
 	mu.Lock()
 	defer mu.Unlock()
+
+	// Work on a shallow copy so we don't modify the caller's struct.
+	toWrite := *cfg
+	if smtpKey != nil && toWrite.SMTP.Password != "" && !secret.IsEncrypted(toWrite.SMTP.Password) {
+		enc, err := secret.Encrypt(smtpKey, toWrite.SMTP.Password)
+		if err != nil {
+			return fmt.Errorf("encrypt SMTP password: %w", err)
+		}
+		toWrite.SMTP.Password = enc
+	}
+
 	path := filepath.Join(configDir, "alerts.json")
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	data, err := json.MarshalIndent(toWrite, "", "  ")
 	if err != nil {
 		return err
 	}

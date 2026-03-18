@@ -3,15 +3,27 @@ package handlers
 import (
 	"net"
 	"net/http"
+	"os"
+	"os/user"
 	"zfsnas/internal/version"
 )
 
-// HandleGetVersion returns the running application version, releases URL, and server IP.
+// HandleGetVersion returns the running application version, releases URL, server IP, and hostname.
 func HandleGetVersion(w http.ResponseWriter, r *http.Request) {
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "localhost"
+	}
+	username := "zfsnas"
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		username = u.Username
+	}
 	jsonOK(w, map[string]string{
 		"version":      version.Version,
 		"releases_url": version.ReleasesURL,
 		"server_ip":    serverIP(),
+		"hostname":     hostname,
+		"username":     username,
 	})
 }
 

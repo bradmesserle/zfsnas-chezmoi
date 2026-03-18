@@ -12,12 +12,20 @@ import (
 	"zfsnas/system"
 )
 
-// HandleGetAlerts returns the current alert configuration.
+// smtpPasswordMask is the sentinel returned by GET and recognised by PUT to mean
+// "password already set — keep existing value unchanged".
+const smtpPasswordMask = "••••••••"
+
+// HandleGetAlerts returns the current alert configuration with the SMTP password masked.
 func HandleGetAlerts(w http.ResponseWriter, r *http.Request) {
 	cfg, err := alerts.Load()
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "failed to load alert config")
 		return
+	}
+	// Never send the real password over the wire — replace with a fixed mask.
+	if cfg.SMTP.Password != "" {
+		cfg.SMTP.Password = smtpPasswordMask
 	}
 	jsonOK(w, cfg)
 }
@@ -28,6 +36,16 @@ func HandleUpdateAlerts(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	// If the UI sent back the mask unchanged, preserve the existing password.
+	if cfg.SMTP.Password == smtpPasswordMask {
+		existing, err := alerts.Load()
+		if err == nil && existing.SMTP.Password != "" {
+			// Re-encrypt the plaintext we just decrypted so Save() stores it properly.
+			cfg.SMTP.Password = existing.SMTP.Password
+		} else {
+			cfg.SMTP.Password = ""
+		}
 	}
 	if err := alerts.Save(&cfg); err != nil {
 		jsonErr(w, http.StatusInternalServerError, "failed to save alert config")

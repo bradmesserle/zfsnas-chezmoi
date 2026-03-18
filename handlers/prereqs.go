@@ -16,7 +16,13 @@ import (
 )
 
 var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+    CheckOrigin: func(r *http.Request) bool {
+        origin := r.Header.Get("Origin")
+        if origin == "" {
+            return true // non-browser clients (curl, etc.)
+        }
+        return strings.HasSuffix(origin, "://"+r.Host)
+    },
 }
 
 // HandleCheckPrereqs returns the status of all required packages and the systemd service.
@@ -243,6 +249,45 @@ WantedBy=multi-user.target
 	jsonOK(w, map[string]string{
 		"message": fmt.Sprintf("Service installed and enabled. ZFS NAS will start on boot as user %s.", currentUser.Username),
 	})
+}
+
+// HandleInstallPackage installs a single optional package from an allowlist.
+// Body: { "package": "targetcli-fb" }
+// The allowlist prevents arbitrary package installation.
+func HandleInstallPackage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Package string `json:"package"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Package = strings.TrimSpace(req.Package)
+
+	allowlist := map[string]bool{
+		"targetcli-fb": true,
+	}
+	if !allowlist[req.Package] {
+		jsonErr(w, http.StatusBadRequest, "package not in allowlist")
+		return
+	}
+
+	out, err := exec.Command("sudo", "apt-get", "install", "-y", "-q", req.Package).CombinedOutput()
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, string(out))
+		return
+	}
+
+	sess := MustSession(r)
+	audit.Log(audit.Entry{
+		User:    sess.Username,
+		Role:    sess.Role,
+		Action:  audit.ActionInstallPrereqs,
+		Result:  audit.ResultOK,
+		Details: "installed: " + req.Package,
+	})
+
+	jsonOK(w, map[string]string{"message": req.Package + " installed"})
 }
 
 // mustJSON marshals v to JSON, panics on error (only for internal use).

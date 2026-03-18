@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -14,7 +15,13 @@ import (
 )
 
 var termUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+    CheckOrigin: func(r *http.Request) bool {
+        origin := r.Header.Get("Origin")
+        if origin == "" {
+            return true // non-browser clients (curl, etc.)
+        }
+        return strings.HasSuffix(origin, "://"+r.Host)
+    },
 }
 
 // termMsg is a control message sent from the browser to signal a terminal resize.

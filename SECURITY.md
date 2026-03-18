@@ -120,6 +120,21 @@ Cmnd_Alias ZFSNAS_DISK = \
     /usr/bin/udevadm settle *, \
     /usr/sbin/blkid -o export
 
+# ── iSCSI sharing ─────────────────────────────────────────────────────────────
+# since v6.1.0 — iSCSI target management via targetcli-fb; service control for
+#   rtslib-fb-targetctl / targetclid / tgt (whichever is installed)
+Cmnd_Alias ZFSNAS_ISCSI = \
+    /usr/bin/targetcli, \
+    /usr/bin/systemctl start rtslib-fb-targetctl, \
+    /usr/bin/systemctl stop rtslib-fb-targetctl, \
+    /usr/bin/systemctl restart rtslib-fb-targetctl, \
+    /usr/bin/systemctl start targetclid, \
+    /usr/bin/systemctl stop targetclid, \
+    /usr/bin/systemctl restart targetclid, \
+    /usr/bin/systemctl start tgt, \
+    /usr/bin/systemctl stop tgt, \
+    /usr/bin/systemctl restart tgt
+
 # ── Folder usage scanning ─────────────────────────────────────────────────────
 # since v6.0.0 — Folder TreeMap feature; scans dataset mount points for per-folder sizes
 Cmnd_Alias ZFSNAS_SCAN = \
@@ -149,7 +164,7 @@ Cmnd_Alias ZFSNAS_APT = \
 
 # ── Grant all of the above, passwordless, to the service account ──────────────
 zfsnas ALL=(ALL) NOPASSWD: \
-    ZFSNAS_ZFS, ZFSNAS_SMB, ZFSNAS_NFS, ZFSNAS_SMART, ZFSNAS_DISK, ZFSNAS_SCAN, ZFSNAS_SYSTEM, ZFSNAS_APT
+    ZFSNAS_ZFS, ZFSNAS_SMB, ZFSNAS_NFS, ZFSNAS_ISCSI, ZFSNAS_SMART, ZFSNAS_DISK, ZFSNAS_SCAN, ZFSNAS_SYSTEM, ZFSNAS_APT
 ```
 
 ### 3 — Run the portal as the service account
@@ -172,6 +187,8 @@ ExecStart=/opt/zfsnas/zfsnas
 - **`zfs load-key` / `zfs unload-key`** — used for ZFS native encryption (v5.0.0+). Key files are stored in `config/keystore/` and are only readable by the `zfsnas` user.
 - **`systemctl restart zfsnas`** — used by the "Restart Portal" option in the power menu (v3.0.0+). Only available to admin-role users.
 - **`find *`** — used to delete files and empty directories in `.recycle/` folders (v6.0.0+). The wildcard allows any path to be passed; scope is limited in practice to share mount points. If you want to tighten this, restrict to your shares root (e.g. `/usr/bin/find /data/*`).
+- **`targetcli`** — used by the iSCSI sharing feature (v6.1.0+) to configure LIO targets, backstores, ACLs, and CHAP credentials via a piped script. The portal generates the full targetcli command sequence internally; no user-supplied input is passed directly to the shell. If you do not use iSCSI, you can omit `ZFSNAS_ISCSI` from the grant line and remove the `targetcli-fb` package.
+- **iSCSI service names** — three possible service names are listed (`rtslib-fb-targetctl`, `targetclid`, `tgt`) to cover different `targetcli-fb` package versions and distributions. Only the service actually installed on your system will be used; the unused entries are harmless.
 - **Command paths** — paths shown are for Ubuntu 22.04/24.04. Some tools (`sgdisk`, `wipefs`, `nvme`) may live under `/usr/sbin/` instead of `/usr/bin/` on older releases; verify with `which <command>`.
 
 ---
