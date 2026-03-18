@@ -52,6 +52,7 @@ jobs:
           /tmp/cosign sign-blob \
             --key /tmp/cosign.key \
             --output-signature dist/zfsnas-chezmoi.sig \
+            --tlog-upload=false \
             dist/zfsnas-chezmoi.sha256
 
           # Clean up private key immediately
