@@ -544,6 +544,8 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   width: 100%;
   max-width: 480px;
   box-shadow: var(--shadow-lg);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .modal-header {
@@ -740,7 +742,34 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   .nav-dot {
     display: none !important;
   }
+  .sidebar-collapse-row {
+    display: none;
+  }
 }
+
+/* Collapse-button row — sits in the existing margin gap above the first sidebar section */
+.sidebar-collapse-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 10px 0;
+}
+
+/* ===== Programmatic compact sidebar (mirrors the responsive media query above) ===== */
+.sidebar.sidebar-compact {
+  width: 52px;
+  min-width: 52px;
+  padding: 8px 0;
+}
+.sidebar.sidebar-compact .sidebar-header { display: none; }
+.sidebar.sidebar-compact .sidebar-section { display: none; }
+.sidebar.sidebar-compact .nav-label { display: none; }
+.sidebar.sidebar-compact .nav-item { justify-content: center; padding: 11px 0; gap: 0; }
+.sidebar.sidebar-compact .nav-icon { width: auto; font-size: 20px; opacity: 0.85; }
+.sidebar.sidebar-compact .nav-item.active .nav-icon { opacity: 1; }
+.sidebar.sidebar-compact .sidebar-footer { display: none; }
+.sidebar.sidebar-compact .nav-dot { display: none !important; }
+.sidebar.sidebar-compact .sidebar-collapse-row { display: none; }
+.sidebar.sidebar-compact #sidebar-expand-btn { display: flex !important; }
 
 /* ===== Capacity Trend page ===== */
 .cap-range-btn {

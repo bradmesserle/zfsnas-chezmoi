@@ -102,6 +102,12 @@
       align-items: flex-end;
     }
     #io-bar.io-bar-visible { display: flex; }
+    /* Hide the 3 performance graphs, activity bar and capacity legend on short viewports (e.g. iPhone landscape) */
+    @media (max-height: 500px) {
+      #io-bar { display: none !important; }
+      #activity-bar { display: none !important; }
+      #pool-legend { display: none !important; }
+    }
     .io-chart-wrap {
       flex: 1;
       display: flex;
@@ -188,7 +194,12 @@
 <div class="app-layout" id="app">
 
   <!-- ===== SIDEBAR ===== -->
-  <nav class="sidebar">
+  <nav class="sidebar" id="sidebar">
+    <!-- Expand button — only visible in compact mode, sized like a nav icon for touch friendliness -->
+    <button id="sidebar-expand-btn" onclick="setSidebarCompact(false)" title="Expand sidebar"
+      style="display:none;width:100%;background:none;border:none;border-bottom:1px solid var(--border);
+             padding:13px 0;cursor:pointer;color:var(--text-3);font-size:22px;line-height:1;
+             justify-content:center;align-items:center;">›</button>
     <div class="sidebar-header">
       <a href="https://github.com/macgaver/zfsnas-chezmoi" target="_blank" rel="noopener" style="display:inline-block;line-height:0;">
         <img src="/static/logo.svg" alt="ZFS NAS" style="height:64px;width:204px;object-fit:contain;">
@@ -207,7 +218,14 @@
       </button>
     </div>
 
-    <div class="sidebar-section">Overview</div>
+    <!-- Collapse button row — uses the existing gap above Overview, adds no net vertical space -->
+    <div class="sidebar-collapse-row">
+      <button onclick="setSidebarCompact(true)" title="Collapse sidebar"
+        style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:17px;
+               line-height:1;padding:3px 6px;opacity:0.5;transition:opacity .15s;border-radius:5px;"
+        onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">‹</button>
+    </div>
+    <div class="sidebar-section" style="margin-top:0;">Overview</div>
     <button class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">🎛️</span><span class="nav-label"> Performance</span></button>
     <button class="nav-item" onclick="showPage('capacity')"  id="nav-capacity"> <span class="nav-icon">📊</span><span class="nav-label"> Capacity Trend</span></button>
 
@@ -867,56 +885,48 @@
 
         <!-- Binary / Portal Update card -->
         <div class="card" style="max-width:720px;margin-bottom:20px;">
-          <h3 style="margin-bottom:4px;">Portal Update</h3>
+          <h3 style="margin-bottom:4px;">ZFSNAS Instant Update</h3>
           <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Keep the portal binary up to date from GitHub Releases.</p>
 
-          <!-- Version comparison row -->
-          <div style="display:flex;align-items:center;gap:24px;padding:14px 18px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:16px;">
-            <div>
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:3px;">Current</div>
-              <div style="font-family:'SF Mono',monospace;font-weight:700;font-size:15px;" id="bup-current">—</div>
-            </div>
-            <div style="color:var(--text-3);font-size:18px;">→</div>
-            <div>
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:3px;">Latest</div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <div style="font-family:'SF Mono',monospace;font-weight:700;font-size:15px;" id="bup-latest">—</div>
-                <span id="bup-sig-badge" class="hidden" title="" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;"></span>
+          <!-- Version comparison rows -->
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:16px;overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);">
+              <div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:2px;">Current</div>
+                <div style="font-family:'SF Mono',monospace;font-weight:700;font-size:15px;" id="bup-current">—</div>
               </div>
             </div>
-            <div style="margin-left:auto;">
-              <button class="btn btn-ghost btn-sm" onclick="checkBinaryUpdate()" id="btn-check-binary-update">↻ Check</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);">
+              <div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:2px;">Latest</div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <div style="font-family:'SF Mono',monospace;font-weight:700;font-size:15px;" id="bup-latest">—</div>
+                  <span id="bup-sig-badge" class="hidden" style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;"></span>
+                </div>
+              </div>
+            </div>
+            <div style="padding:10px 18px;">
+              <button class="btn btn-ghost btn-sm" onclick="checkBinaryUpdate()" id="btn-check-binary-update">↻ Check for Update</button>
             </div>
           </div>
 
           <div id="bup-uptodate" class="hidden" style="color:var(--accent-3);font-size:13px;font-weight:600;margin-bottom:12px;">✔ Already up to date</div>
 
           <!-- Signature invalid error banner -->
-          <div id="bup-sig-invalid" class="hidden" style="margin-bottom:12px;padding:12px 16px;background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.4);border-radius:var(--radius-sm);display:flex;align-items:flex-start;gap:10px;">
+          <div id="bup-sig-invalid" class="hidden" onclick="showSigInvalidHelp()" style="margin-bottom:12px;padding:12px 16px;background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.4);border-radius:var(--radius-sm);display:flex;align-items:flex-start;gap:10px;cursor:pointer;" title="Click for more information">
             <span style="font-size:18px;line-height:1;flex-shrink:0;">🔴</span>
-            <div>
-              <div style="font-weight:600;color:#ff3b30;font-size:13px;margin-bottom:3px;">Signature Invalid — Automatic Update Blocked</div>
+            <div style="flex:1;">
+              <div style="font-weight:600;color:#ff3b30;font-size:13px;margin-bottom:3px;">Signature Invalid — Automatic Update Blocked <span style="font-size:12px;opacity:0.75;">ⓘ</span></div>
               <div id="bup-sig-invalid-reason" style="font-size:12px;color:var(--text-2);line-height:1.5;"></div>
             </div>
           </div>
 
-          <!-- Enable toggle + Update Now button -->
-          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-2);">
-              <input type="checkbox" id="live-update-toggle" onchange="toggleLiveUpdate()"
-                style="width:15px;height:15px;accent-color:var(--accent-2);">
-              Enable live binary updates
-            </label>
-            <div id="btn-apply-binary-wrap" class="hidden">
-              <button class="btn btn-primary btn-sm" onclick="applyBinaryUpdate()">⬆ Update Now</button>
-            </div>
+          <!-- Instant Update button -->
+          <div id="btn-apply-binary-wrap" class="hidden">
+            <button class="btn btn-sm" onclick="applyBinaryUpdate()"
+              style="background:var(--accent-warn);color:#000;font-weight:700;border:none;">⚡ Instant Update Now</button>
           </div>
-          <div style="font-size:12px;color:var(--text-3);margin-top:8px;">Disabled by default. Replaces the running binary and restarts in-place via systemd.</div>
 
-          <div id="binary-update-log" class="hidden"
-            style="margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;
-                   font-family:'SF Mono',monospace;font-size:12px;line-height:1.6;max-height:240px;overflow-y:auto;
-                   white-space:pre-wrap;color:var(--accent-3);"></div>
         </div>
 
         <!-- OS Packages card -->
@@ -1490,6 +1500,70 @@
       <button class="btn" id="btn-recursive-delete-confirm"
         style="background:var(--accent-danger);color:#fff;opacity:.4;cursor:not-allowed;"
         disabled onclick="submitRecursiveDelete()">Delete Recursively</button>
+    </div>
+  </div>
+</div>
+
+<!-- Signature Invalid Help Modal -->
+<div class="modal-backdrop hidden" id="modal-sig-invalid-help" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,59,48,0.12);border:1px solid rgba(255,59,48,0.35);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🔴</div>
+        <div>
+          <h3 style="margin-bottom:1px;color:#ff3b30;">Signature Verification Failed</h3>
+          <div style="font-size:12px;color:var(--text-3);">Instant Update is blocked for your protection</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="document.getElementById('modal-sig-invalid-help').classList.add('hidden')">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:4px;">
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:8px;">What does this mean?</div>
+        <p style="font-size:13px;color:var(--text-2);line-height:1.65;margin:0;">
+          Before applying an update,
+          the portal verifies that the downloaded binary's signature matches the embedded public key.
+          If verification fails, the <strong>Instant Update Now</strong> button is hidden to prevent installing
+          a tampered, corrupted, or unofficial binary.
+        </p>
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:8px;">Possible reasons</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;gap:10px;font-size:13px;color:var(--text-2);line-height:1.5;">
+            <span style="flex-shrink:0;color:var(--accent-warn);">→</span>
+            <span>The release was just published and the signature file hasn't fully propagated through GitHub's CDN — wait a few minutes and click <strong>↻ Check</strong> again.</span>
+          </div>
+          <div style="display:flex;gap:10px;font-size:13px;color:var(--text-2);line-height:1.5;">
+            <span style="flex-shrink:0;color:var(--accent-warn);">→</span>
+            <span>You are running an unofficial, development, or self-compiled build that was not signed with the release key.</span>
+          </div>
+          <div style="display:flex;gap:10px;font-size:13px;color:var(--text-2);line-height:1.5;">
+            <span style="flex-shrink:0;color:var(--accent-warn);">→</span>
+            <span>A network proxy, firewall, or CDN cache is returning a stale or modified response.</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-bottom:8px;">How to update manually</div>
+        <ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text-2);line-height:1.55;">
+          <li>Go to <a href="https://github.com/macgaver/zfsnas-chezmoi/releases" target="_blank" rel="noopener" style="color:var(--accent-2);">github.com/macgaver/zfsnas-chezmoi/releases</a> and download the latest <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;">zfsnas</code> binary.</li>
+          <li>Transfer it to your NAS:<br>
+            <code style="display:inline-block;margin-top:4px;background:var(--surface2);padding:3px 8px;border-radius:5px;font-size:12px;color:var(--accent-3);">scp zfsnas user@nas-ip:~/zfsnas</code>
+          </li>
+          <li>Stop the service, replace the binary and restart:<br>
+            <code style="display:inline-block;margin-top:4px;background:var(--surface2);padding:3px 8px;border-radius:5px;font-size:12px;color:var(--accent-3);">sudo service zfsnas stop &amp;&amp; mv ~/zfsnas /path/to/zfsnas &amp;&amp; sudo service zfsnas start</code>
+          </li>
+        </ol>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-sig-invalid-help').classList.add('hidden')">Close</button>
+      <a href="https://github.com/macgaver/zfsnas-chezmoi/releases" target="_blank" rel="noopener" class="btn btn-primary btn-sm">View Releases ↗</a>
     </div>
   </div>
 </div>
@@ -3627,6 +3701,91 @@
 </div>
 
 <script>
+// ===== Session-expired popup =====
+function _showSessionExpiredPopup() {
+  if (document.getElementById('session-expired-popup')) return; // already shown
+
+  const popup = document.createElement('div');
+  popup.id = 'session-expired-popup';
+  popup.style.cssText = [
+    'position:fixed',
+    'top:50%',
+    'left:50%',
+    'transform:translate(-50%,-50%)',
+    'z-index:9999',
+    'background:var(--surface)',
+    'border:1px solid var(--border)',
+    'border-radius:var(--radius-lg)',
+    'box-shadow:var(--shadow-lg),0 0 0 1px rgba(255,212,10,0.18)',
+    'padding:28px 28px 24px',
+    'width:340px',
+    'user-select:none',
+  ].join(';');
+
+  popup.innerHTML = `
+    <div id="session-expired-drag-handle" style="display:flex;align-items:center;gap:12px;margin-bottom:18px;cursor:grab;">
+      <div style="width:38px;height:38px;border-radius:50%;background:rgba(255,212,10,0.12);border:1px solid rgba(255,212,10,0.3);
+                  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🔒</div>
+      <div>
+        <div style="font-weight:700;font-size:15px;color:var(--text);">Session Expired</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:1px;">Drag to move</div>
+      </div>
+      <button onclick="document.getElementById('session-expired-popup').remove()"
+        style="margin-left:auto;background:none;border:none;color:var(--text-3);font-size:20px;cursor:pointer;padding:2px 4px;line-height:1;"
+        title="Dismiss">×</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin:0 0 20px;">
+      Your session is no longer valid — you may have been logged out due to inactivity or a server restart.
+      Please log in again to continue.
+    </p>
+    <button onclick="window.location.href='/login'"
+      style="width:100%;padding:10px;background:var(--accent-warn);color:#000;font-weight:700;
+             border:none;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;">
+      Go to Login
+    </button>`;
+
+  document.body.appendChild(popup);
+
+  // Make it draggable via the handle
+  const handle = document.getElementById('session-expired-drag-handle');
+  let dragging = false, ox = 0, oy = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    const r = popup.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    handle.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    popup.style.transform = 'none';
+    popup.style.left = (e.clientX - ox) + 'px';
+    popup.style.top  = (e.clientY - oy) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false;
+    handle.style.cursor = 'grab';
+  });
+}
+
+// ===== Global 401 interceptor — show session-expired popup on expired/invalid session =====
+(function() {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = async function(input, init) {
+    const resp = await _origFetch(input, init);
+    if (resp.status === 401) {
+      const url = (typeof input === 'string') ? input : (input.url || '');
+      // Don't intercept the login/TOTP/setup endpoints — those legitimately return 401
+      if (!url.includes('/api/auth/login') && !url.includes('/api/auth/totp') && !url.includes('/api/auth/setup')) {
+        _showSessionExpiredPopup();
+        return new Promise(() => {}); // halt further processing in the caller
+      }
+    }
+    return resp;
+  };
+})();
+
 // ===== Constants =====
 const COLORS = [
   ['#bf5af2','#9b40d4'], ['#0a84ff','#0066cc'], ['#32d74b','#25a838'],
@@ -3642,7 +3801,7 @@ let abExpanded       = true;
 let abRefreshInt     = null;
 let activeJobs       = {};  // id -> { label, startedAt }
 let prereqData       = null;
-let appSettings      = { port: 8443, storage_unit: 'gb', live_update_enabled: false, max_smbd_processes: 100 };
+let appSettings      = { port: 8443, storage_unit: 'gb', max_smbd_processes: 100 };
 let _dashRefreshTimer = null;
 let _dashCharts      = {};
 
@@ -3702,6 +3861,25 @@ let _dashCharts      = {};
   setInterval(refreshSnapshotNavDot, 60000);
   startIOPoller();
 })();
+
+// ===== Sidebar compact mode =====
+function setSidebarCompact(compact) {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+  if (compact) {
+    sidebar.classList.add('sidebar-compact');
+  } else {
+    sidebar.classList.remove('sidebar-compact');
+  }
+  try { localStorage.setItem('sidebar-compact', compact ? '1' : '0'); } catch {}
+}
+// Restore compact preference on load
+try {
+  if (localStorage.getItem('sidebar-compact') === '1') {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.classList.add('sidebar-compact');
+  }
+} catch {}
 
 // ===== Navigation =====
 function showPage(name) {
@@ -10523,7 +10701,8 @@ async function _autoBinaryVersionCheck() {
     const dot = document.getElementById('nav-updates-dot');
     if (data.update_available) {
       latestEl.style.color = 'var(--accent-warn)';
-      if (appSettings.live_update_enabled) applyWrap.classList.remove('hidden');
+      if (data.sig_valid === true) applyWrap.classList.remove('hidden');
+      uptodateEl.classList.add('hidden');
       const badge = document.getElementById('sidebar-update-badge');
       if (badge) { badge.textContent = '⬆ v' + data.latest; badge.classList.remove('hidden'); }
       if (dot) dot.style.display = 'inline-block';
@@ -11294,6 +11473,10 @@ async function toggleLiveUpdate() {
   });
 }
 
+function showSigInvalidHelp() {
+  document.getElementById('modal-sig-invalid-help').classList.remove('hidden');
+}
+
 function _applyBupSigBadge(data) {
   const sigInvalid = document.getElementById('bup-sig-invalid');
   if (sigInvalid) sigInvalid.classList.add('hidden');
@@ -11307,11 +11490,13 @@ function _applyBupSigBadge(data) {
     badge.title = 'Release binary was signed by the official zfsnas-chezmoi signing key';
     badge.classList.remove('hidden');
   } else if (data.sig_error || data.sig_valid === false) {
-    badge.textContent = '⚠ Unverified';
+    badge.textContent = '⚠ Unverified ⓘ';
     badge.style.background = 'rgba(255,159,10,0.12)';
     badge.style.color = '#ff9f0a';
     badge.style.border = '1px solid rgba(255,159,10,0.4)';
-    badge.title = data.sig_error || 'Signature could not be verified';
+    badge.style.cursor = 'pointer';
+    badge.title = 'Click for more information';
+    badge.onclick = showSigInvalidHelp;
     badge.classList.remove('hidden');
   } else {
     badge.classList.add('hidden');
@@ -11342,7 +11527,7 @@ async function checkBinaryUpdate() {
     _applyBupSigBadge(data);
     if (data.update_available) {
       latestEl.style.color = 'var(--accent-warn)';
-      if (appSettings.live_update_enabled) applyWrap.classList.remove('hidden');
+      if (data.sig_valid === true) applyWrap.classList.remove('hidden');
     } else {
       uptodateEl.classList.remove('hidden');
     }
@@ -11351,11 +11536,10 @@ async function checkBinaryUpdate() {
 }
 
 function applyBinaryUpdate() {
-  const logEl       = document.getElementById('binary-update-log');
-  const applyWrap   = document.getElementById('btn-apply-binary-wrap');
-  const checkBtn    = document.getElementById('btn-check-binary-update');
-  const sigInvalid  = document.getElementById('bup-sig-invalid');
-  const sigReason   = document.getElementById('bup-sig-invalid-reason');
+  const applyWrap  = document.getElementById('btn-apply-binary-wrap');
+  const checkBtn   = document.getElementById('btn-check-binary-update');
+  const sigInvalid = document.getElementById('bup-sig-invalid');
+  const sigReason  = document.getElementById('bup-sig-invalid-reason');
 
   // Block update if the last check reported an invalid or missing signature.
   const cached = _loadVerCache();
@@ -11370,25 +11554,51 @@ function applyBinaryUpdate() {
   }
 
   if (sigInvalid) sigInvalid.classList.add('hidden');
-  logEl.classList.remove('hidden');
-  logEl.textContent = '';
-  applyWrap.classList.add('hidden');
+  if (applyWrap) applyWrap.classList.add('hidden');
   if (checkBtn) checkBtn.disabled = true;
 
+  // Show a status message while waiting for the portal to come back.
+  const card = applyWrap ? applyWrap.closest('.card') : null;
+  const statusEl = document.createElement('div');
+  statusEl.id = 'bup-restart-status';
+  statusEl.style.cssText = 'margin-top:12px;font-size:13px;color:var(--accent-warn);font-weight:600;';
+  statusEl.textContent = '⟳ Updating… waiting for portal to restart';
+  if (card) card.appendChild(statusEl);
+
+  // Trigger the update via WebSocket.
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(proto + '//' + location.host + '/ws/binary-update-apply');
-  ws.onmessage = e => {
-    const msg = JSON.parse(e.data);
-    if (msg.line) { logEl.textContent += msg.line + '\n'; logEl.scrollTop = logEl.scrollHeight; }
-    if (msg.done) {
-      if (checkBtn) checkBtn.disabled = false;
-      if (!msg.success) logEl.textContent += 'Failed: ' + msg.message + '\n';
-    }
-  };
-  ws.onerror = () => {
-    logEl.textContent += '\nWebSocket connection error.';
-    if (checkBtn) checkBtn.disabled = false;
-  };
+  try {
+    const ws = new WebSocket(proto + '//' + location.host + '/ws/binary-update-apply');
+    ws.onerror = () => {}; // expected once service restarts
+  } catch {}
+
+  // Poll /api/version (bypassing the 401 interceptor) until the portal responds,
+  // then go straight to the login page.
+  // Wait at least 3 s before the first poll to give the service time to stop.
+  const _rawFetch = window.fetch; // capture current (intercepted) fetch; we bypass it below
+  let dots = 0;
+  const dotTimer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    if (statusEl) statusEl.textContent = '⟳ Updating… waiting for portal to restart' + '.'.repeat(dots + 1);
+  }, 600);
+
+  setTimeout(async function poll() {
+    try {
+      // Use XMLHttpRequest to bypass our fetch interceptor entirely.
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/version');
+        xhr.onload = resolve;   // any HTTP response means the portal is up
+        xhr.onerror = reject;   // network error = still down
+        xhr.send();
+      });
+      clearInterval(dotTimer);
+      // Forget the cached version so the next session does a fresh check
+      // and doesn't show a stale "update available" after a successful upgrade.
+      try { localStorage.removeItem(_VER_CACHE_KEY); } catch {}
+      window.location.href = '/login';
+    } catch { setTimeout(poll, 1500); }
+  }, 3000);
 }
 
 // ── iOS PWA zoom reset ────────────────────────────────────────────────────────
@@ -11453,6 +11663,7 @@ document.addEventListener('click', function(e) {
     'modal-delete-replication':  closeDeleteReplicationModal,
     'modal-install':          closeInstallModal,
     'modal-about':            closeAbout,
+    'modal-sig-invalid-help': () => document.getElementById('modal-sig-invalid-help').classList.add('hidden'),
   };
   const fn = closeFns[e.target.id];
   if (fn) fn();
