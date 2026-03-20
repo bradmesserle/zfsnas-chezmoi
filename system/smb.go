@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -397,6 +398,63 @@ func cleanOlderThan(dir string, cutoff time.Time) error {
 		"-mindepth", "1", "-type", "d", "-empty", "-delete").Run()
 
 	return nil
+}
+
+// ShareClient holds the IP address and optional reverse-DNS hostname of a
+// connected SMB or NFS client.
+type ShareClient struct {
+	IP   string `json:"ip"`
+	FQDN string `json:"fqdn,omitempty"`
+}
+
+// GetSMBSessions returns active Samba connections grouped by share name.
+// It parses "smbstatus -S" output and performs a reverse-DNS lookup for each
+// unique client IP.
+func GetSMBSessions() map[string][]ShareClient {
+	result := make(map[string][]ShareClient)
+	out, err := exec.Command("sudo", "smbstatus", "-S").Output()
+	if err != nil {
+		return result
+	}
+	seen := make(map[string]map[string]bool)
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		svc := fields[0]
+		// Skip the header line, separator lines, and the internal IPC$ service.
+		if svc == "Service" || strings.HasPrefix(svc, "-") || svc == "IPC$" {
+			continue
+		}
+		machine := fields[2]
+		// Strip port suffix when present (e.g. "192.168.1.5:445").
+		if h, _, e := net.SplitHostPort(machine); e == nil {
+			machine = h
+		}
+		if seen[svc] == nil {
+			seen[svc] = make(map[string]bool)
+		}
+		if seen[svc][machine] {
+			continue
+		}
+		seen[svc][machine] = true
+		result[svc] = append(result[svc], ShareClient{
+			IP:   machine,
+			FQDN: reverseLookup(machine),
+		})
+	}
+	return result
+}
+
+// reverseLookup returns the first PTR record for ip, stripped of its trailing
+// dot.  Returns "" when no record exists or DNS is unavailable.
+func reverseLookup(ip string) string {
+	names, err := net.LookupAddr(ip)
+	if err != nil || len(names) == 0 {
+		return ""
+	}
+	return strings.TrimRight(names[0], ".")
 }
 
 // writeFileSudo writes content to a path using sudo tee.

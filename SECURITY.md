@@ -77,6 +77,7 @@ Cmnd_Alias ZFSNAS_ZFS = \
 # ── Samba (SMB shares) ────────────────────────────────────────────────────────
 # since v1.0.0 — Samba service control, user provisioning, share config write
 # since v6.0.0 — find (recycle bin cleanup: delete files older than retention in .recycle/)
+# since v6.1.0 — smbstatus -S (active session listing on the SMB shares page)
 Cmnd_Alias ZFSNAS_SMB = \
     /usr/bin/systemctl reload smbd, \
     /usr/bin/systemctl restart smbd, \
@@ -89,7 +90,8 @@ Cmnd_Alias ZFSNAS_SMB = \
     /usr/bin/smbpasswd -s -a *, \
     /usr/bin/chmod 777 *, \
     /usr/bin/tee /etc/samba/smb.conf, \
-    /usr/bin/find *
+    /usr/bin/find *, \
+    /usr/bin/smbstatus -S
 
 # ── NFS shares ────────────────────────────────────────────────────────────────
 # since v2.0.0 — NFS share management and export config write
@@ -186,6 +188,7 @@ ExecStart=/opt/zfsnas/zfsnas
 - **`dd` / `wipefs` / `sgdisk`** — used by the "Wipe Disk" feature before adding a disk to a pool. These are destructive by design; ensure only trusted admins have access to the portal.
 - **`zfs load-key` / `zfs unload-key`** — used for ZFS native encryption (v5.0.0+). Key files are stored in `config/keystore/` and are only readable by the `zfsnas` user.
 - **`systemctl restart zfsnas`** — used by the "Restart Portal" option in the power menu (v3.0.0+). Only available to admin-role users.
+- **`smbstatus -S`** — used to list active SMB sessions per share (v6.1.0+). On Debian/Ubuntu the `smbstatus` binary only exposes session data to root, so sudo is required. NFS session data comes from `showmount -a` and `/proc/fs/nfsd/clients/`, which are readable without sudo.
 - **`find *`** — used to delete files and empty directories in `.recycle/` folders (v6.0.0+). The wildcard allows any path to be passed; scope is limited in practice to share mount points. If you want to tighten this, restrict to your shares root (e.g. `/usr/bin/find /data/*`).
 - **`targetcli`** — used by the iSCSI sharing feature (v6.1.0+) to configure LIO targets, backstores, ACLs, and CHAP credentials via a piped script. The portal generates the full targetcli command sequence internally; no user-supplied input is passed directly to the shell. If you do not use iSCSI, you can omit `ZFSNAS_ISCSI` from the grant line and remove the `targetcli-fb` package.
 - **iSCSI service names** — three possible service names are listed (`rtslib-fb-targetctl`, `targetclid`, `tgt`) to cover different `targetcli-fb` package versions and distributions. Only the service actually installed on your system will be used; the unused entries are harmless.

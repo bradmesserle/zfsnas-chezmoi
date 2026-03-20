@@ -133,11 +133,26 @@ func GetDiskIOSnapshot() *DiskIOSnapshot {
 	return diskIOLatest
 }
 
+var (
+	poolMemberCacheMu  sync.Mutex
+	poolMemberCache    []string
+	poolMemberCachedAt time.Time
+)
+
 // poolMemberBaseNames returns the kernel device names (e.g. "sda", "vdb") for ALL
 // ZFS pools' member devices so the IO poller captures data for every pool.
 // Uses `zpool status -P` for full paths, then resolves any by-partuuid/UUID
 // paths to real device names via lsblk/blkid.
+//
+// Results are cached for 5 minutes — pool topology almost never changes and
+// running `zpool status -P` every 3 s (the disk-IO poll interval) is wasteful.
 func poolMemberBaseNames() []string {
+	poolMemberCacheMu.Lock()
+	defer poolMemberCacheMu.Unlock()
+	if time.Since(poolMemberCachedAt) < 5*time.Minute && poolMemberCache != nil {
+		return poolMemberCache
+	}
+
 	out, err := exec.Command("sudo", "zpool", "status", "-P").Output()
 	if err != nil || len(out) == 0 {
 		return nil
@@ -185,6 +200,8 @@ func poolMemberBaseNames() []string {
 			names = append(names, base)
 		}
 	}
+	poolMemberCache = names
+	poolMemberCachedAt = time.Now()
 	return names
 }
 

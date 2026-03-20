@@ -189,6 +189,8 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(http.HandlerFunc(HandleListShares))).Methods("GET")
 	r.Handle("/api/shares",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCreateShare)))).Methods("POST")
+	r.Handle("/api/shares/sessions",
+		RequireAuth(http.HandlerFunc(HandleGetSMBSessions))).Methods("GET")
 	r.Handle("/api/shares/{name}",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleUpdateShare)))).Methods("PUT")
 	r.Handle("/api/shares/{name}",
@@ -315,6 +317,8 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleUpdateNFSShare)))).Methods("PUT")
 	r.Handle("/api/nfs/shares/{id}",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleDeleteNFSShare)))).Methods("DELETE")
+	r.Handle("/api/nfs/sessions",
+		RequireAuth(http.HandlerFunc(HandleGetNFSSessions))).Methods("GET")
 
 	// --- Alerts ---
 	r.Handle("/api/alerts",

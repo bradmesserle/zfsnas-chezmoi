@@ -3,6 +3,7 @@ package system
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,11 +70,16 @@ func applyExports(shares []NFSShare) error {
 		if s.Comment != "" {
 			sb.WriteString("# " + s.Comment + "\n")
 		}
-		client := s.Client
-		if client == "" {
-			client = "*"
+		clients := strings.Fields(s.Client)
+		if len(clients) == 0 {
+			clients = []string{"*"}
 		}
-		sb.WriteString(fmt.Sprintf("%s %s(%s)\n", s.Path, client, nfsOpts(s)))
+		opts := nfsOpts(s)
+		var parts []string
+		for _, c := range clients {
+			parts = append(parts, fmt.Sprintf("%s(%s)", c, opts))
+		}
+		sb.WriteString(fmt.Sprintf("%s %s\n", s.Path, strings.Join(parts, " ")))
 	}
 	sb.WriteString(nfsEndMarker + "\n")
 	managed := sb.String()
@@ -146,6 +152,137 @@ func NFSStatus() string {
 		return "inactive"
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// GetNFSSessions returns active NFS mounts grouped by export path.
+//
+// Three sources are tried in order; results are deduplicated:
+//  1. "ss -tnH sport = :2049" — lists all established TCP connections to the
+//     NFS port (works for both NFSv3 and NFSv4, no sudo required).
+//  2. "showmount -a --no-headers" — covers NFSv3 setups where showmount is
+//     installed; gives exact client:path pairs.
+//  3. /proc/fs/nfsd/clients/ — NFSv4 kernel client table (read without sudo
+//     on kernels that allow it).
+//
+// For sources 1 and 3 the client IP is matched against the configured exports
+// by CIDR/wildcard to produce a per-export breakdown.
+func GetNFSSessions(exports []NFSShare) map[string][]ShareClient {
+	result := make(map[string][]ShareClient)
+	seen := make(map[string]map[string]bool)
+
+	addClient := func(path, ip string) {
+		// Normalise IPv4-mapped IPv6 (e.g. "::ffff:192.168.1.1" → "192.168.1.1").
+		ip = strings.TrimPrefix(ip, "::ffff:")
+		if seen[path] == nil {
+			seen[path] = make(map[string]bool)
+		}
+		if seen[path][ip] {
+			return
+		}
+		seen[path][ip] = true
+		result[path] = append(result[path], ShareClient{
+			IP:   ip,
+			FQDN: reverseLookup(ip),
+		})
+	}
+
+	// Source 1: ss (no sudo, works for NFSv3 + NFSv4).
+	// Output format: "ESTAB 0 0 server:2049 client:port"
+	if out, err := exec.Command("ss", "-tnH", "sport = :2049").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 5 {
+				continue
+			}
+			// fields[4] is the peer address "ip:port" or "[ipv6]:port"
+			ip, _, err := net.SplitHostPort(fields[4])
+			if err != nil {
+				continue
+			}
+			for _, exp := range exports {
+				if nfsClientMatches(ip, exp.Client) {
+					addClient(exp.Path, ip)
+				}
+			}
+		}
+	}
+
+	// Source 2: showmount (NFSv3, gives exact client:path pairs).
+	if out, err := exec.Command("showmount", "-a", "--no-headers").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			idx := strings.LastIndex(line, ":")
+			if idx <= 0 {
+				continue
+			}
+			host := strings.TrimSpace(line[:idx])
+			path := strings.TrimSpace(line[idx+1:])
+			if host == "" || !strings.HasPrefix(path, "/") {
+				continue
+			}
+			addClient(path, host)
+		}
+	}
+
+	// Source 3: /proc/fs/nfsd/clients/ (NFSv4, readable without sudo on some kernels).
+	if entries, err := os.ReadDir("/proc/fs/nfsd/clients"); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			data, err := os.ReadFile("/proc/fs/nfsd/clients/" + e.Name() + "/info")
+			if err != nil {
+				continue
+			}
+			ip := ""
+			for _, line := range strings.Split(string(data), "\n") {
+				if strings.HasPrefix(line, "address:") {
+					addr := strings.TrimSpace(strings.TrimPrefix(line, "address:"))
+					if h, _, e2 := net.SplitHostPort(addr); e2 == nil {
+						ip = h
+					} else {
+						ip = addr
+					}
+					break
+				}
+			}
+			if ip == "" {
+				continue
+			}
+			for _, exp := range exports {
+				if nfsClientMatches(ip, exp.Client) {
+					addClient(exp.Path, ip)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// nfsClientMatches reports whether ip is covered by the export's client field.
+// client may be a space-separated list of IPs, CIDRs, or "*".
+func nfsClientMatches(ip, client string) bool {
+	for _, c := range strings.Fields(client) {
+		if c == "*" {
+			return true
+		}
+		if strings.Contains(c, "/") {
+			_, network, err := net.ParseCIDR(c)
+			if err != nil {
+				continue
+			}
+			if parsed := net.ParseIP(ip); parsed != nil && network.Contains(parsed) {
+				return true
+			}
+		} else if ip == c {
+			return true
+		}
+	}
+	return client == "" // empty means any
 }
 
 // ControlNFS runs systemctl start/stop/restart on nfs-server.

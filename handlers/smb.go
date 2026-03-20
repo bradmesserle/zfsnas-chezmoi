@@ -11,6 +11,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// HandleGetSMBSessions returns active Samba connections grouped by share name.
+func HandleGetSMBSessions(w http.ResponseWriter, r *http.Request) {
+	if !system.IsSambaInstalled() {
+		jsonOK(w, map[string][]system.ShareClient{})
+		return
+	}
+	jsonOK(w, system.GetSMBSessions())
+}
+
 // HandleSMBStatus returns Samba installation and service status.
 func HandleSMBStatus(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{

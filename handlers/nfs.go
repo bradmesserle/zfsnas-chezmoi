@@ -11,6 +11,16 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// HandleGetNFSSessions returns active NFS mounts grouped by export path.
+func HandleGetNFSSessions(w http.ResponseWriter, r *http.Request) {
+	if !system.IsNFSInstalled() {
+		jsonOK(w, map[string][]system.ShareClient{})
+		return
+	}
+	exports, _ := system.ListNFSShares(config.Dir())
+	jsonOK(w, system.GetNFSSessions(exports))
+}
+
 // HandleNFSStatus returns NFS installation and service status.
 func HandleNFSStatus(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{

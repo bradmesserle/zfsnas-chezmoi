@@ -2880,8 +2880,8 @@
         <div class="text-3 text-xs" style="margin-top:4px;">Choose a dataset or type a custom path.</div>
       </div>
       <div class="form-group">
-        <label>Client <span class="text-3 text-xs">(CIDR or * for all hosts)</span></label>
-        <input type="text" id="nfs-client" placeholder="10.0.0.0/8 or *" value="*">
+        <label>Client <span class="text-3 text-xs">(space-separated IPs, CIDRs, or * for all)</span></label>
+        <input type="text" id="nfs-client" placeholder="192.168.1.5 10.0.0.0/8 or *" value="*">
       </div>
       <div class="form-group">
         <label>Comment <span class="text-3 text-xs">(optional)</span></label>
@@ -9088,9 +9088,11 @@ async function loadShares() {
   } catch {}
 
   try {
-    const resp = await fetch('/api/shares');
-    const shares = await resp.json() || [];
-    renderShares(el, shares);
+    const [shares, sessions] = await Promise.all([
+      fetch('/api/shares').then(r => r.json()).then(d => d || []),
+      fetch('/api/shares/sessions').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]);
+    renderShares(el, shares, sessions);
   } catch {
     el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load shares.</div>';
   }
@@ -9098,7 +9100,7 @@ async function loadShares() {
 
 let _sharesCache = [];
 
-function renderShares(el, shares) {
+function renderShares(el, shares, sessions = {}) {
   _sharesCache = shares;
   if (!shares.length) {
     el.innerHTML = `
@@ -9125,6 +9127,7 @@ function renderShares(el, shares) {
         ${s.guest_ok ? '<span style="color:var(--accent-warn);">Guest OK</span>' : ''}
         ${(s.valid_users&&s.valid_users.length) ? esc(s.valid_users.join(', ')) : (s.guest_ok ? '' : 'All users')}
       </td>
+      ${_renderShareClientCell(sessions[s.name] || [])}
       <td style="text-align:right;white-space:nowrap;">
         ${currentUser.role==='admin' ? `
           <button class="btn btn-ghost btn-sm" onclick="openEditShareByIdx(${i})">Edit</button>
@@ -9139,7 +9142,7 @@ function renderShares(el, shares) {
       <table>
         <thead><tr>
           <th>Share Name</th><th>Path</th>${showComment ? '<th>Comment</th>' : ''}
-          <th>Access</th><th>Users</th><th></th>
+          <th>Access</th><th>Users</th><th>Sessions</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -9511,15 +9514,17 @@ async function loadNFSShares() {
   } catch {}
 
   try {
-    const resp   = await fetch('/api/nfs/shares');
-    const shares = await resp.json() || [];
-    renderNFSShares(el, shares);
+    const [shares, sessions] = await Promise.all([
+      fetch('/api/nfs/shares').then(r => r.json()).then(d => d || []),
+      fetch('/api/nfs/sessions').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]);
+    renderNFSShares(el, shares, sessions);
   } catch {
     el.innerHTML = '<div style="color:var(--accent-danger);padding:24px;">Failed to load NFS shares.</div>';
   }
 }
 
-function renderNFSShares(el, shares) {
+function renderNFSShares(el, shares, sessions = {}) {
   _nfsSharesCache = shares;
   if (!shares.length) {
     el.innerHTML = `
@@ -9540,6 +9545,7 @@ function renderNFSShares(el, shares) {
         ? '<span class="badge badge-readonly">Read-only</span>'
         : '<span class="badge badge-ok">Read/Write</span>'}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--text-2);">${nfsOptsDisplay(s)}</td>
+      ${_renderShareClientCell(sessions[s.path] || [])}
       ${showComment ? `<td class="text-2" style="font-size:13px;">${esc(s.comment||'—')}</td>` : ''}
       <td style="text-align:right;white-space:nowrap;">${currentUser.role==='admin' ? `
         <button class="btn btn-ghost btn-sm" onclick="openEditNFSShare(${i})">Edit</button>
@@ -9552,7 +9558,7 @@ function renderNFSShares(el, shares) {
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Path</th><th>Client</th><th>Access</th><th>Options</th>${showComment ? '<th>Comment</th>' : ''}<th></th>
+          <th>Path</th><th>Client</th><th>Access</th><th>Options</th><th>Sessions</th>${showComment ? '<th>Comment</th>' : ''}<th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -9964,6 +9970,27 @@ function _renderISCSISessionCell(initiators) {
     <span class="sess-tip" data-tip="${esc(tip)}" style="display:inline-flex;align-items:center;gap:5px;">
       <span style="width:7px;height:7px;border-radius:50%;background:#30d158;display:inline-block;flex-shrink:0;"></span>
       <span style="font-size:12px;color:#30d158;font-weight:600;">${initiators.length}</span>
+    </span>
+  </td>`;
+}
+
+// Renders a "Clients" table cell for SMB and NFS share rows.
+// clients is an array of {ip, fqdn?} objects from /api/shares/sessions or
+// /api/nfs/sessions.  The tooltip shows each client as "ip (fqdn)" or just
+// "ip" when no reverse-DNS name is known.
+function _renderShareClientCell(clients) {
+  if (!clients || clients.length === 0) {
+    return `<td style="color:var(--text-3);font-size:12px;">0</td>`;
+  }
+  const lines = clients.map((c, i) => {
+    const label = c.fqdn ? `${c.ip} (${c.fqdn})` : c.ip;
+    return clients.length > 1 ? `${i + 1}. ${label}` : label;
+  });
+  const tip = esc(lines.join('\n'));
+  return `<td>
+    <span class="sess-tip" data-tip="${tip}" style="display:inline-flex;align-items:center;gap:5px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:#30d158;display:inline-block;flex-shrink:0;"></span>
+      <span style="font-size:12px;color:#30d158;font-weight:600;">${clients.length}</span>
     </span>
   </td>`;
 }
