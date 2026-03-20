@@ -85,6 +85,36 @@
     .al-event-row:last-child { border-bottom: none; }
     .al-event-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
     .al-event-row input[type=number]   { width: 58px; display: inline; padding: 2px 6px; margin: 0 4px; }
+
+    /* Notification target section */
+    .notif-target {
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      margin-bottom: 10px; overflow: hidden;
+    }
+    .notif-target-header {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: var(--surface2); cursor: pointer; user-select: none;
+    }
+    .notif-target-header input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+    .notif-target-header span { font-size: 13px; font-weight: 600; flex: 1; }
+
+    /* In-app alert toast overlay */
+    #alert-toasts {
+      position: fixed; bottom: 70px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
+      max-width: 360px; pointer-events: none;
+    }
+    .alert-toast {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+      padding: 12px 14px; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+      pointer-events: all;
+      animation: toastSlideIn .2s ease;
+    }
+    @keyframes toastSlideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
     .al-section-title {
       font-size: 11px; font-weight: 700; text-transform: uppercase;
       letter-spacing: .06em; color: var(--text-2); margin: 20px 0 10px;
@@ -884,20 +914,18 @@
         </div>
 
         <!-- Binary / Portal Update card -->
-        <div class="card" style="max-width:720px;margin-bottom:20px;">
+        <div class="card">
           <h3 style="margin-bottom:4px;">ZFSNAS Instant Update</h3>
           <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Keep the portal binary up to date from GitHub Releases.</p>
 
           <!-- Version comparison rows -->
           <div style="background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:16px;overflow:hidden;">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);">
-              <div>
+            <div style="display:flex;flex-wrap:wrap;">
+              <div style="flex:1;min-width:200px;padding:12px 18px;border-bottom:1px solid var(--border);">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:2px;">Current</div>
                 <div style="font-family:'SF Mono',monospace;font-weight:700;font-size:15px;" id="bup-current">—</div>
               </div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);">
-              <div>
+              <div style="flex:1;min-width:200px;padding:12px 18px;border-bottom:1px solid var(--border);">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:2px;">Latest</div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   <div style="font-family:'SF Mono',monospace;font-weight:700;font-size:15px;" id="bup-latest">—</div>
@@ -930,45 +958,49 @@
         </div>
 
         <!-- OS Packages card -->
-        <div class="card" style="max-width:720px;margin-bottom:20px;">
+        <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
             <div>
               <h3 style="margin-bottom:2px;">OS Packages</h3>
-              <div style="font-size:13px;color:var(--text-3);">System packages via apt-get</div>
+              <div id="os-info-line" style="font-size:13px;color:var(--text-3);">Loading…</div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="checkUpdates()" id="btn-check-updates">↻ Check for Updates</button>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn btn-ghost btn-sm" onclick="checkUpdates()" id="btn-check-updates">↻ Check for Updates</button>
+              <button class="btn btn-primary btn-sm hidden" onclick="applyUpdates()" id="btn-apply-updates">⬇ Install Updates</button>
+            </div>
           </div>
           <div id="updates-status" style="color:var(--text-3);font-size:14px;">Click "Check for Updates" to scan for available packages.</div>
           <div id="updates-pkg-list" style="margin-top:16px;display:none;">
-            <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:10px;">Available upgrades:</div>
+            <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px;">
+              <div style="font-size:13px;font-weight:600;color:var(--text-2);">Available upgrades:</div>
+              <div id="updates-checked-at" style="font-size:12px;color:var(--text-3);"></div>
+            </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Package</th><th>New Version</th></tr></thead>
+                <thead><tr><th>Package</th><th>Current Version</th><th>New Version</th><th>Type</th></tr></thead>
                 <tbody id="updates-pkg-tbody"></tbody>
               </table>
             </div>
-            <button class="btn btn-primary" style="margin-top:16px;" onclick="applyUpdates()" id="btn-apply-updates">
-              Apply Updates
-            </button>
           </div>
         </div>
 
         <!-- OS update live output log -->
-        <div id="updates-log-wrap" class="card" style="max-width:720px;display:none;">
+        <div id="updates-log-wrap" class="card" style="display:none;">
           <div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:10px;">Output</div>
           <div id="updates-log"
             style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;
                    font-family:'SF Mono',monospace;font-size:12px;line-height:1.6;max-height:420px;overflow-y:auto;
                    white-space:pre-wrap;color:var(--accent-3);"></div>
         </div>
+
       </div>
       <div class="page hidden" id="page-settings">
         <div class="page-header">
           <h2>Settings</h2>
-          <button class="btn btn-ghost btn-sm" onclick="loadSettings()">↻ Refresh</button>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:20px;align-items:start;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;align-items:start;">
 
+        <!-- ── 1. General (always first) ── -->
         <div class="card">
           <h3 style="margin-bottom:20px;">General</h3>
           <div id="settings-alert" class="alert alert-error hidden"></div>
@@ -999,12 +1031,8 @@
             <div class="text-3 text-sm" style="margin-top:4px;">Requires a server restart to take effect.</div>
           </div>
 
-          <button class="btn btn-primary btn-sm" onclick="saveSettings()" style="margin-top:8px;">Apply</button>
-        </div>
-
-        <!-- Samba card -->
-        <div class="card">
-          <h3 style="margin-bottom:4px;">Samba (SMB)</h3>
+          <!-- Samba (SMB) -->
+          <h4 style="margin:20px 0 4px;font-size:14px;">Samba (SMB)</h4>
           <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Performance and resource tuning for the Samba file sharing service.</p>
           <div id="smb-settings-alert" class="alert alert-error hidden"></div>
           <div id="smb-settings-ok"    class="alert alert-success hidden" style="margin-bottom:16px;"></div>
@@ -1015,14 +1043,11 @@
             <input type="number" id="settings-max-smbd" min="1" max="10000" value="100" style="max-width:160px;">
             <div class="text-3 text-sm" style="margin-top:4px;">Applied immediately to smb.conf and reloads Samba. Default: 100.</div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="saveSmbSettings()" style="margin-top:4px;">Apply</button>
-        </div>
 
-        <!-- Timezone card -->
-        <div class="card">
-          <h3 style="margin-bottom:4px;">Server Timezone
+          <!-- Timezone -->
+          <h4 style="margin:20px 0 4px;font-size:14px;">Server Timezone
             <i class="info-tip tip-down" style="margin-left:6px;" data-tip="Sets the system clock timezone for the entire server.&#10;&#10;This affects:&#10;• Snapshot schedules — cron times are interpreted in this timezone, so &quot;daily at 02:00&quot; means 2 AM local time.&#10;• Scrub schedule (Sunday 02:00 local time).&#10;• Audit log timestamps shown in the portal.&#10;• Any scheduled tasks or alerts.&#10;&#10;Change takes effect immediately — no restart required."></i>
-          </h3>
+          </h4>
           <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Configure the timezone used for scheduling and log timestamps.</p>
           <div id="tz-alert" class="alert alert-error hidden"></div>
           <div id="tz-ok"    class="alert alert-success hidden" style="margin-bottom:16px;"></div>
@@ -1032,10 +1057,11 @@
               <option value="">Loading…</option>
             </select>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="saveTimezone()">Apply</button>
+
+          <button class="btn btn-primary btn-sm" onclick="saveSettings();saveSmbSettings();saveTimezone();" style="margin-top:8px;">Apply</button>
         </div>
 
-        <!-- Encryption Key Management -->
+        <!-- ── 2. Encryption Key Management ── -->
         <div class="card" id="card-key-mgmt">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
             <div>
@@ -1067,87 +1093,7 @@
           </div>
         </div>
 
-        <!-- Alerts card -->
-        <div class="card">
-          <h3 style="margin-bottom:4px;">Email Alerts</h3>
-          <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Send notifications when important events occur.</p>
-          <div id="alerts-alert" class="alert alert-error hidden"></div>
-          <div id="alerts-ok"    class="alert alert-success hidden" style="margin-bottom:16px;"></div>
-
-          <div class="form-group">
-            <label>Recipients <span style="color:var(--text-3);font-weight:400;">(one email per line)</span></label>
-            <textarea id="al-to" rows="3" placeholder="admin@example.com&#10;ops@example.com" style="resize:vertical;"></textarea>
-          </div>
-
-          <!-- Collapsible SMTP Configuration -->
-          <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
-            <button type="button" onclick="toggleSMTPConfig()" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:13px;font-weight:600;">
-              <span>SMTP Configuration</span>
-              <span id="al-smtp-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
-            </button>
-            <div id="al-smtp-body" style="display:none;padding:0 14px 14px;">
-              <div class="form-group">
-                <label>Host</label>
-                <input type="text" id="al-host" placeholder="smtp.example.com">
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 150px;gap:12px;">
-                <div class="form-group">
-                  <label>Port</label>
-                  <input type="number" id="al-port" value="587" min="1" max="65535">
-                </div>
-                <div class="form-group">
-                  <label>Auth Mode</label>
-                  <select id="al-auth" onchange="updateAuthFields()">
-                    <option value="none">None</option>
-                    <option value="plain">PLAIN</option>
-                    <option value="starttls" selected>STARTTLS</option>
-                    <option value="tls">TLS</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>From Address</label>
-                <input type="email" id="al-from" placeholder="nas@example.com">
-              </div>
-              <div id="al-auth-fields">
-                <div class="form-group">
-                  <label>Username</label>
-                  <input type="text" id="al-username" placeholder="SMTP username" autocomplete="off">
-                </div>
-                <div class="form-group">
-                  <label>Password</label>
-                  <input type="password" id="al-password" placeholder="SMTP password" autocomplete="new-password">
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Collapsible Event Subscriptions -->
-          <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
-            <button type="button" onclick="toggleEventSubs()" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:13px;font-weight:600;">
-              <span>Event Subscriptions</span>
-              <span id="al-events-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
-            </button>
-            <div id="al-events-body" style="display:none;padding:0 14px 14px;">
-              <label class="al-event-row"><input type="checkbox" id="al-ev-pool">    <span>Pool health degraded (DEGRADED / FAULTED)</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-smart">   <span>SMART error detected on any disk</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-wearout"> <span>Disk wearout exceeds <input type="number" id="al-wearout-pct" value="80" min="1" max="100" onclick="event.stopPropagation()">% <i class="info-tip tip-left tip-down" data-tip="Sends an alert when any SSD/NVMe reports wearout above this threshold. Wearout % is derived from SMART attribute 177 (wear levelling count) or 231 (SSD life left). HDDs without an endurance rating are excluded."></i></span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-login">   <span>Failed logins exceed <input type="number" id="al-login-count" value="5" min="1" max="1000" onclick="event.stopPropagation()"> attempts</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-updates"> <span>Ubuntu security updates available</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-scrub">   <span>Scrub completed with errors</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-snapshot"><span>Snapshot auto-policy failure</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-users">   <span>User created / deleted</span></label>
-              <label class="al-event-row"><input type="checkbox" id="al-ev-shares">  <span>Share created / deleted</span></label>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:8px;margin-top:20px;">
-            <button class="btn btn-primary btn-sm" onclick="saveAlerts()">Apply</button>
-            <button class="btn btn-ghost btn-sm"   onclick="testAlert()">Send Test Email</button>
-          </div>
-        </div>
-
-        <!-- Folder TreeMap Schedule card -->
+        <!-- ── 3. Folder TreeMap Schedule ── -->
         <div class="card">
           <h3 style="margin-bottom:4px;">Folder TreeMap Schedule</h3>
           <p style="color:var(--text-3);font-size:13px;margin-bottom:20px;">Automatically refresh the Folders TreeMap for every pool. Pools are scanned one after the other and each scan is logged in the activity log.</p>
@@ -1168,6 +1114,259 @@
           </div>
         </div>
 
+        <!-- ── 4. Notifications Email ── -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;">Notifications Email</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="al-em-enabled" style="width:14px;height:14px;accent-color:var(--accent);">Enable
+            </label>
+          </div>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Send HTML alert emails via SMTP.</p>
+          <div id="notif-em-alert" class="alert alert-error hidden"></div>
+          <div id="notif-em-ok"    class="alert alert-success hidden" style="margin-bottom:12px;"></div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleTargetCfg('em')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Configuration</span><span id="al-em-cfg-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-em-cfg-body" style="display:none;padding:0 14px 14px;">
+              <div class="form-group">
+                <label>Recipients <span style="color:var(--text-3);font-weight:400;">(one per line)</span></label>
+                <textarea id="al-em-to" rows="3" placeholder="admin@example.com&#10;ops@example.com" style="resize:vertical;"></textarea>
+              </div>
+              <div style="margin-bottom:4px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+                <button type="button" onclick="toggleSMTPConfig()" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+                  <span>SMTP Configuration</span>
+                  <span id="al-smtp-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+                </button>
+                <div id="al-smtp-body" style="display:none;padding:0 14px 14px;">
+                  <div class="form-group"><label>Host</label><input type="text" id="al-host" placeholder="smtp.example.com"></div>
+                  <div style="display:grid;grid-template-columns:1fr 150px;gap:12px;">
+                    <div class="form-group"><label>Port</label><input type="number" id="al-port" value="587" min="1" max="65535"></div>
+                    <div class="form-group">
+                      <label>Auth Mode</label>
+                      <select id="al-auth" onchange="updateAuthFields()">
+                        <option value="none">None</option>
+                        <option value="plain">PLAIN</option>
+                        <option value="starttls" selected>STARTTLS</option>
+                        <option value="tls">TLS</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group"><label>From Address</label><input type="email" id="al-from" placeholder="nas@example.com"></div>
+                  <div id="al-auth-fields">
+                    <div class="form-group"><label>Username</label><input type="text" id="al-username" placeholder="SMTP username" autocomplete="off"></div>
+                    <div class="form-group"><label>Password</label><input type="password" id="al-password" placeholder="SMTP password" autocomplete="new-password"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleEventSubs('em')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Event Subscriptions</span><span id="al-em-ev-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-em-events-body" style="display:none;padding:0 14px 10px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts('em')">Apply</button>
+            <button class="btn btn-ghost btn-sm" onclick="testAlertTarget('email')">Send Test Email</button>
+          </div>
+        </div>
+
+        <!-- ── 5. Notifications Gotify ── -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;">Notifications Gotify</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="al-gt-enabled" style="width:14px;height:14px;accent-color:var(--accent);">Enable
+            </label>
+          </div>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Push notifications to a self-hosted <a href="https://gotify.net" target="_blank" style="color:var(--accent);">Gotify</a> server.</p>
+          <div id="notif-gt-alert" class="alert alert-error hidden"></div>
+          <div id="notif-gt-ok"    class="alert alert-success hidden" style="margin-bottom:12px;"></div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleTargetCfg('gt')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Configuration</span><span id="al-gt-cfg-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-gt-cfg-body" style="display:none;padding:0 14px 14px;">
+              <div class="form-group"><label>Server URL</label><input type="text" id="al-gt-url" placeholder="https://gotify.example.com"></div>
+              <div class="form-group"><label>App Token</label><input type="password" id="al-gt-token" placeholder="App token" autocomplete="new-password"></div>
+              <div class="form-group"><label>Priority <span style="color:var(--text-3);font-weight:400;">(1–10)</span></label><input type="number" id="al-gt-prio" value="5" min="1" max="10"></div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleEventSubs('gt')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Event Subscriptions</span><span id="al-gt-ev-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-gt-events-body" style="display:none;padding:0 14px 10px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts('gt')">Apply</button>
+            <button class="btn btn-ghost btn-sm" onclick="testAlertTarget('gotify')">Send Test</button>
+          </div>
+        </div>
+
+        <!-- ── 6. Notifications In-App ── -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;">Notifications In-App</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="al-ws-enabled" style="width:14px;height:14px;accent-color:var(--accent);">Enable
+            </label>
+          </div>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Real-time toast notifications pushed to all browser sessions currently open in this portal. No external server required.</p>
+          <div id="notif-ws-alert" class="alert alert-error hidden"></div>
+          <div id="notif-ws-ok"    class="alert alert-success hidden" style="margin-bottom:12px;"></div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleEventSubs('ws')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Event Subscriptions</span><span id="al-ws-ev-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-ws-events-body" style="display:none;padding:0 14px 10px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts('ws')">Apply</button>
+            <button class="btn btn-ghost btn-sm" onclick="testAlertTarget('websocket')">Send Test</button>
+          </div>
+        </div>
+
+        <!-- ── 7. Notifications ntfy ── -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;">Notifications ntfy</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="al-nt-enabled" style="width:14px;height:14px;accent-color:var(--accent);">Enable
+            </label>
+          </div>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Push notifications via <a href="https://ntfy.sh" target="_blank" style="color:var(--accent);">ntfy.sh</a> or a self-hosted ntfy server.</p>
+          <div id="notif-nt-alert" class="alert alert-error hidden"></div>
+          <div id="notif-nt-ok"    class="alert alert-success hidden" style="margin-bottom:12px;"></div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleTargetCfg('nt')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Configuration</span><span id="al-nt-cfg-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-nt-cfg-body" style="display:none;padding:0 14px 14px;">
+              <div class="form-group"><label>Topic URL</label><input type="text" id="al-nt-url" placeholder="https://ntfy.sh/mytopic"></div>
+              <div class="form-group"><label>Token <span style="color:var(--text-3);font-weight:400;">(optional)</span></label><input type="password" id="al-nt-token" placeholder="Bearer token" autocomplete="new-password"></div>
+              <div class="form-group">
+                <label>Priority</label>
+                <select id="al-nt-prio">
+                  <option value="default">Default</option>
+                  <option value="low">Low</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleEventSubs('nt')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Event Subscriptions</span><span id="al-nt-ev-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-nt-events-body" style="display:none;padding:0 14px 10px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts('nt')">Apply</button>
+            <button class="btn btn-ghost btn-sm" onclick="testAlertTarget('ntfy')">Send Test</button>
+          </div>
+        </div>
+
+        <!-- ── 8. Notifications Pushover ── -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;">Notifications Pushover</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="al-po-enabled" style="width:14px;height:14px;accent-color:var(--accent);">Enable
+            </label>
+          </div>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Push notifications via <a href="https://pushover.net" target="_blank" style="color:var(--accent);">Pushover</a> to iOS and Android.</p>
+          <div id="notif-po-alert" class="alert alert-error hidden"></div>
+          <div id="notif-po-ok"    class="alert alert-success hidden" style="margin-bottom:12px;"></div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleTargetCfg('po')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Configuration</span><span id="al-po-cfg-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-po-cfg-body" style="display:none;padding:0 14px 14px;">
+              <div class="form-group"><label>User Key</label><input type="text" id="al-po-userkey" placeholder="Pushover user key"></div>
+              <div class="form-group"><label>API Token</label><input type="password" id="al-po-token" placeholder="App API token" autocomplete="new-password"></div>
+              <div class="form-group"><label>Device <span style="color:var(--text-3);font-weight:400;">(optional — blank = all devices)</span></label><input type="text" id="al-po-device" placeholder="myphone"></div>
+              <div class="form-group">
+                <label>Priority</label>
+                <select id="al-po-prio">
+                  <option value="-2">Lowest (no notification)</option>
+                  <option value="-1">Low (quiet)</option>
+                  <option value="0" selected>Normal</option>
+                  <option value="1">High</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleEventSubs('po')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Event Subscriptions</span><span id="al-po-ev-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-po-events-body" style="display:none;padding:0 14px 10px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts('po')">Apply</button>
+            <button class="btn btn-ghost btn-sm" onclick="testAlertTarget('pushover')">Send Test</button>
+          </div>
+        </div>
+
+        <!-- ── 9. Notifications Syslog ── -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <h3 style="margin:0;">Notifications Syslog</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;font-weight:400;">
+              <input type="checkbox" id="al-sl-enabled" style="width:14px;height:14px;accent-color:var(--accent);">Enable
+            </label>
+          </div>
+          <p style="color:var(--text-3);font-size:13px;margin-bottom:16px;">Send RFC 3164 syslog messages to a remote syslog server over UDP or TCP.</p>
+          <div id="notif-sl-alert" class="alert alert-error hidden"></div>
+          <div id="notif-sl-ok"    class="alert alert-success hidden" style="margin-bottom:12px;"></div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleTargetCfg('sl')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Configuration</span><span id="al-sl-cfg-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-sl-cfg-body" style="display:none;padding:0 14px 14px;">
+              <div class="form-group"><label>Host</label><input type="text" id="al-sl-host" placeholder="192.168.1.10"></div>
+              <div style="display:grid;grid-template-columns:1fr 110px 120px;gap:12px;">
+                <div class="form-group"><label>Port</label><input type="number" id="al-sl-port" value="514" min="1" max="65535"></div>
+                <div class="form-group">
+                  <label>Protocol</label>
+                  <select id="al-sl-proto"><option value="udp" selected>UDP</option><option value="tcp">TCP</option></select>
+                </div>
+                <div class="form-group">
+                  <label>Facility</label>
+                  <select id="al-sl-facility">
+                    <option value="daemon" selected>daemon</option>
+                    <option value="user">user</option>
+                    <option value="local0">local0</option>
+                    <option value="local1">local1</option>
+                    <option value="local2">local2</option>
+                    <option value="local3">local3</option>
+                    <option value="local4">local4</option>
+                    <option value="local5">local5</option>
+                    <option value="local6">local6</option>
+                    <option value="local7">local7</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group"><label>Tag <span style="color:var(--text-3);font-weight:400;">(app name in syslog header)</span></label><input type="text" id="al-sl-tag" placeholder="zfsnas"></div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;">
+            <button type="button" onclick="toggleEventSubs('sl')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;color:var(--text-2);font-size:12px;font-weight:600;">
+              <span>Event Subscriptions</span><span id="al-sl-ev-chevron" style="transition:transform .15s;color:var(--text-3);">▶</span>
+            </button>
+            <div id="al-sl-events-body" style="display:none;padding:0 14px 10px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" onclick="saveAlerts('sl')">Apply</button>
+            <button class="btn btn-ghost btn-sm" onclick="testAlertTarget('syslog')">Send Test</button>
+          </div>
+        </div>
+
         </div><!-- /settings grid -->
       </div>
 
@@ -1184,6 +1383,9 @@
       </div>
       <div id="terminal-container" style="flex:1;background:#0d0d0f;overflow:hidden;padding:4px 8px;"></div>
     </div>
+
+    <!-- ===== IN-APP ALERT TOASTS ===== -->
+    <div id="alert-toasts"></div>
 
     <!-- ===== BOTTOM ACTIVITY BAR ===== -->
     <div class="activity-bar expanded" id="activity-bar">
@@ -3841,9 +4043,10 @@ let _dashCharts      = {};
     }
     if (d.username) window._serverUsername = d.username;
     updateSchedReplUserHint();
-  }).catch(() => {}).finally(() => { _sidebarVersionCheck(); });
+  }).catch(() => {}).finally(() => { _sidebarVersionCheck(); setInterval(_sidebarVersionCheck, 86400000); });
 
   await loadSettings();
+  initAlertsWebSocket();
   showPage('dashboard');
   startActivityBarRefresh();
   checkPrereqsBanner();
@@ -4877,45 +5080,30 @@ async function saveSmbSettings() {
 }
 
 // ===== Alerts =====
-function toggleEventSubs() {
-  const body    = document.getElementById('al-events-body');
-  const chevron = document.getElementById('al-events-chevron');
+// ===== Notifications (multi-target alerts) =====
+
+function toggleTargetCfg(prefix) {
+  const body    = document.getElementById(`al-${prefix}-cfg-body`);
+  const chevron = document.getElementById(`al-${prefix}-cfg-chevron`);
   const open    = body.style.display !== 'none';
   body.style.display      = open ? 'none' : 'block';
-  chevron.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+  chevron.style.transform = open ? '' : 'rotate(90deg)';
 }
+
+function toggleEventSubs(prefix) {
+  const body    = document.getElementById(`al-${prefix}-events-body`);
+  const chevron = document.getElementById(`al-${prefix}-ev-chevron`);
+  const open    = body.style.display !== 'none';
+  body.style.display      = open ? 'none' : 'block';
+  chevron.style.transform = open ? '' : 'rotate(90deg)';
+}
+
 function toggleSMTPConfig() {
   const body    = document.getElementById('al-smtp-body');
   const chevron = document.getElementById('al-smtp-chevron');
   const open    = body.style.display !== 'none';
-  body.style.display        = open ? 'none' : 'block';
-  chevron.style.transform   = open ? 'rotate(0deg)' : 'rotate(90deg)';
-}
-async function loadAlerts() {
-  try {
-    const resp = await fetch('/api/alerts');
-    if (!resp.ok) return;
-    const d = await resp.json();
-    document.getElementById('al-host').value     = d.smtp?.host      || '';
-    document.getElementById('al-port').value     = d.smtp?.port      || 587;
-    document.getElementById('al-from').value     = d.smtp?.from      || '';
-    document.getElementById('al-auth').value     = d.smtp?.auth_mode || 'starttls';
-    document.getElementById('al-username').value = d.smtp?.username  || '';
-    document.getElementById('al-password').value = d.smtp?.password  || '';
-    document.getElementById('al-to').value       = (d.to || []).join('\n');
-    document.getElementById('al-ev-pool').checked     = !!d.events?.pool_degraded;
-    document.getElementById('al-ev-smart').checked    = !!d.events?.smart_error;
-    document.getElementById('al-ev-wearout').checked  = !!d.events?.wearout_exceeded;
-    document.getElementById('al-wearout-pct').value   = d.events?.wearout_threshold_pct  || 80;
-    document.getElementById('al-ev-login').checked    = !!d.events?.failed_login_alert;
-    document.getElementById('al-login-count').value   = d.events?.failed_login_threshold || 5;
-    document.getElementById('al-ev-updates').checked  = !!d.events?.security_updates;
-    document.getElementById('al-ev-scrub').checked    = !!d.events?.scrub_errors;
-    document.getElementById('al-ev-snapshot').checked = !!d.events?.snapshot_failure;
-    document.getElementById('al-ev-users').checked    = !!d.events?.user_created_deleted;
-    document.getElementById('al-ev-shares').checked   = !!d.events?.share_created_deleted;
-    updateAuthFields();
-  } catch {}
+  body.style.display      = open ? 'none' : 'block';
+  chevron.style.transform = open ? '' : 'rotate(90deg)';
 }
 
 function updateAuthFields() {
@@ -4923,33 +5111,171 @@ function updateAuthFields() {
   document.getElementById('al-auth-fields').style.display = mode === 'none' ? 'none' : '';
 }
 
-async function saveAlerts() {
-  const alertEl = document.getElementById('alerts-alert');
-  const okEl    = document.getElementById('alerts-ok');
+function _buildEventSubsHTML(p) {
+  return `
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-pool"><span>Pool health degraded (DEGRADED / FAULTED)</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-smart"><span>SMART error detected on any disk</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-wearout"><span>Disk wearout exceeds <input type="number" id="al-${p}-wearout-pct" value="80" min="1" max="100" onclick="event.stopPropagation()">% <i class="info-tip tip-left tip-down" data-tip="Sends an alert when any SSD/NVMe reports wearout above this threshold."></i></span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-login"><span>Failed logins exceed <input type="number" id="al-${p}-login-count" value="5" min="1" max="1000" onclick="event.stopPropagation()"> attempts</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-updates"><span>OS security updates available</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-scrub"><span>Scrub completed with errors</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-snapshot"><span>Snapshot auto-policy failure</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-users"><span>User created / deleted</span></label>
+    <label class="al-event-row"><input type="checkbox" id="al-${p}-ev-shares"><span>Share created / deleted</span></label>`;
+}
+
+function _loadEventSubs(p, ev) {
+  const el = document.getElementById(`al-${p}-events-body`);
+  if (!el) return;
+  if (!el.hasChildNodes()) el.innerHTML = _buildEventSubsHTML(p);
+  if (!ev) return;
+  const setChk = (id, v) => { const e = document.getElementById(id); if (e) e.checked = !!v; };
+  const setNum = (id, v, d) => { const e = document.getElementById(id); if (e) e.value = v || d; };
+  setChk(`al-${p}-ev-pool`,     ev.pool_degraded);
+  setChk(`al-${p}-ev-smart`,    ev.smart_error);
+  setChk(`al-${p}-ev-wearout`,  ev.wearout_exceeded);
+  setNum(`al-${p}-wearout-pct`, ev.wearout_threshold_pct, 80);
+  setChk(`al-${p}-ev-login`,    ev.failed_login_alert);
+  setNum(`al-${p}-login-count`, ev.failed_login_threshold, 5);
+  setChk(`al-${p}-ev-updates`,  ev.security_updates);
+  setChk(`al-${p}-ev-scrub`,    ev.scrub_errors);
+  setChk(`al-${p}-ev-snapshot`, ev.snapshot_failure);
+  setChk(`al-${p}-ev-users`,    ev.user_created_deleted);
+  setChk(`al-${p}-ev-shares`,   ev.share_created_deleted);
+}
+
+function _collectEventSubs(p) {
+  const chk = id => !!(document.getElementById(id)?.checked);
+  const num = (id, d) => parseInt(document.getElementById(id)?.value) || d;
+  return {
+    pool_degraded:          chk(`al-${p}-ev-pool`),
+    smart_error:            chk(`al-${p}-ev-smart`),
+    wearout_exceeded:       chk(`al-${p}-ev-wearout`),
+    wearout_threshold_pct:  num(`al-${p}-wearout-pct`, 80),
+    failed_login_alert:     chk(`al-${p}-ev-login`),
+    failed_login_threshold: num(`al-${p}-login-count`, 5),
+    security_updates:       chk(`al-${p}-ev-updates`),
+    scrub_errors:           chk(`al-${p}-ev-scrub`),
+    snapshot_failure:       chk(`al-${p}-ev-snapshot`),
+    user_created_deleted:   chk(`al-${p}-ev-users`),
+    share_created_deleted:  chk(`al-${p}-ev-shares`),
+  };
+}
+
+async function loadAlerts() {
+  try {
+    const resp = await fetch('/api/alerts');
+    if (!resp.ok) return;
+    const d = await resp.json();
+
+    // Ensure event sub HTML is injected for all targets.
+    ['em','nt','gt','po','sl','ws'].forEach(p => {
+      const el = document.getElementById(`al-${p}-events-body`);
+      if (el && !el.hasChildNodes()) el.innerHTML = _buildEventSubsHTML(p);
+    });
+
+    // Email
+    document.getElementById('al-em-enabled').checked = !!d.email?.enabled;
+    document.getElementById('al-em-to').value       = (d.email?.to || []).join('\n');
+    document.getElementById('al-host').value         = d.email?.smtp?.host      || '';
+    document.getElementById('al-port').value         = d.email?.smtp?.port      || 587;
+    document.getElementById('al-from').value         = d.email?.smtp?.from      || '';
+    document.getElementById('al-auth').value         = d.email?.smtp?.auth_mode || 'starttls';
+    document.getElementById('al-username').value     = d.email?.smtp?.username  || '';
+    document.getElementById('al-password').value     = d.email?.smtp?.password  || '';
+    _loadEventSubs('em', d.email?.events);
+    updateAuthFields();
+
+    // ntfy
+    document.getElementById('al-nt-enabled').checked = !!d.ntfy?.enabled;
+    document.getElementById('al-nt-url').value   = d.ntfy?.url      || '';
+    document.getElementById('al-nt-token').value = d.ntfy?.token    || '';
+    document.getElementById('al-nt-prio').value  = d.ntfy?.priority || 'default';
+    _loadEventSubs('nt', d.ntfy?.events);
+
+    // Gotify
+    document.getElementById('al-gt-enabled').checked = !!d.gotify?.enabled;
+    document.getElementById('al-gt-url').value   = d.gotify?.url      || '';
+    document.getElementById('al-gt-token').value = d.gotify?.token    || '';
+    document.getElementById('al-gt-prio').value  = d.gotify?.priority || 5;
+    _loadEventSubs('gt', d.gotify?.events);
+
+    // Pushover
+    document.getElementById('al-po-enabled').checked = !!d.pushover?.enabled;
+    document.getElementById('al-po-userkey').value = d.pushover?.user_key   || '';
+    document.getElementById('al-po-token').value   = d.pushover?.api_token  || '';
+    document.getElementById('al-po-device').value  = d.pushover?.device     || '';
+    document.getElementById('al-po-prio').value    = String(d.pushover?.priority ?? 0);
+    _loadEventSubs('po', d.pushover?.events);
+
+    // Syslog
+    document.getElementById('al-sl-enabled').checked = !!d.syslog?.enabled;
+    document.getElementById('al-sl-host').value     = d.syslog?.host     || '';
+    document.getElementById('al-sl-port').value     = d.syslog?.port     || 514;
+    document.getElementById('al-sl-proto').value    = d.syslog?.protocol || 'udp';
+    document.getElementById('al-sl-facility').value = d.syslog?.facility || 'daemon';
+    document.getElementById('al-sl-tag').value      = d.syslog?.tag      || 'zfsnas';
+    _loadEventSubs('sl', d.syslog?.events);
+
+    // WebSocket
+    document.getElementById('al-ws-enabled').checked = !!d.websocket?.enabled;
+    _loadEventSubs('ws', d.websocket?.events);
+  } catch {}
+}
+
+async function saveAlerts(prefix) {
+  const alertEl = document.getElementById(`notif-${prefix}-alert`);
+  const okEl    = document.getElementById(`notif-${prefix}-ok`);
   alertEl.classList.add('hidden');
   okEl.classList.add('hidden');
   const body = {
-    smtp: {
-      host:      document.getElementById('al-host').value.trim(),
-      port:      parseInt(document.getElementById('al-port').value) || 587,
-      from:      document.getElementById('al-from').value.trim(),
-      auth_mode: document.getElementById('al-auth').value,
-      username:  document.getElementById('al-username').value,
-      password:  document.getElementById('al-password').value,
+    email: {
+      enabled: document.getElementById('al-em-enabled').checked,
+      smtp: {
+        host:      document.getElementById('al-host').value.trim(),
+        port:      parseInt(document.getElementById('al-port').value) || 587,
+        from:      document.getElementById('al-from').value.trim(),
+        auth_mode: document.getElementById('al-auth').value,
+        username:  document.getElementById('al-username').value,
+        password:  document.getElementById('al-password').value,
+      },
+      to:     document.getElementById('al-em-to').value.split('\n').map(s => s.trim()).filter(Boolean),
+      events: _collectEventSubs('em'),
     },
-    to: document.getElementById('al-to').value.split('\n').map(s => s.trim()).filter(Boolean),
-    events: {
-      pool_degraded:          document.getElementById('al-ev-pool').checked,
-      smart_error:            document.getElementById('al-ev-smart').checked,
-      wearout_exceeded:       document.getElementById('al-ev-wearout').checked,
-      wearout_threshold_pct:  parseInt(document.getElementById('al-wearout-pct').value)  || 80,
-      failed_login_alert:     document.getElementById('al-ev-login').checked,
-      failed_login_threshold: parseInt(document.getElementById('al-login-count').value)  || 5,
-      security_updates:       document.getElementById('al-ev-updates').checked,
-      scrub_errors:           document.getElementById('al-ev-scrub').checked,
-      snapshot_failure:       document.getElementById('al-ev-snapshot').checked,
-      user_created_deleted:   document.getElementById('al-ev-users').checked,
-      share_created_deleted:  document.getElementById('al-ev-shares').checked,
+    ntfy: {
+      enabled:  document.getElementById('al-nt-enabled').checked,
+      url:      document.getElementById('al-nt-url').value.trim(),
+      token:    document.getElementById('al-nt-token').value,
+      priority: document.getElementById('al-nt-prio').value,
+      events:   _collectEventSubs('nt'),
+    },
+    gotify: {
+      enabled:  document.getElementById('al-gt-enabled').checked,
+      url:      document.getElementById('al-gt-url').value.trim(),
+      token:    document.getElementById('al-gt-token').value,
+      priority: parseInt(document.getElementById('al-gt-prio').value) || 5,
+      events:   _collectEventSubs('gt'),
+    },
+    pushover: {
+      enabled:   document.getElementById('al-po-enabled').checked,
+      user_key:  document.getElementById('al-po-userkey').value.trim(),
+      api_token: document.getElementById('al-po-token').value,
+      device:    document.getElementById('al-po-device').value.trim(),
+      priority:  parseInt(document.getElementById('al-po-prio').value) || 0,
+      events:    _collectEventSubs('po'),
+    },
+    syslog: {
+      enabled:  document.getElementById('al-sl-enabled').checked,
+      host:     document.getElementById('al-sl-host').value.trim(),
+      port:     parseInt(document.getElementById('al-sl-port').value) || 514,
+      protocol: document.getElementById('al-sl-proto').value,
+      facility: document.getElementById('al-sl-facility').value,
+      tag:      document.getElementById('al-sl-tag').value.trim() || 'zfsnas',
+      events:   _collectEventSubs('sl'),
+    },
+    websocket: {
+      enabled: document.getElementById('al-ws-enabled').checked,
+      events:  _collectEventSubs('ws'),
     },
   };
   const resp = await fetch('/api/alerts', {
@@ -4957,28 +5283,64 @@ async function saveAlerts() {
   });
   const data = await resp.json();
   if (!resp.ok) {
-    alertEl.textContent = data.error || 'Failed to save alert settings.';
+    alertEl.textContent = data.error || 'Failed to save notification settings.';
     alertEl.classList.remove('hidden');
   } else {
-    okEl.textContent = data.message || 'Alert settings saved.';
+    okEl.textContent = data.message || 'Notification settings saved.';
     okEl.classList.remove('hidden');
   }
 }
 
-async function testAlert() {
-  const alertEl = document.getElementById('alerts-alert');
-  const okEl    = document.getElementById('alerts-ok');
+// Map API target name → card prefix for per-card feedback
+const _targetPrefix = { email:'em', ntfy:'nt', gotify:'gt', pushover:'po', syslog:'sl', websocket:'ws' };
+
+async function testAlertTarget(target) {
+  const prefix  = _targetPrefix[target] || target;
+  const alertEl = document.getElementById(`notif-${prefix}-alert`);
+  const okEl    = document.getElementById(`notif-${prefix}-ok`);
   alertEl.classList.add('hidden');
   okEl.classList.add('hidden');
-  const resp = await fetch('/api/alerts/test', { method: 'POST' });
+  const resp = await fetch(`/api/alerts/test/${target}`, { method: 'POST' });
   const data = await resp.json();
   if (!resp.ok) {
-    alertEl.textContent = data.error || 'Failed to send test email.';
+    alertEl.textContent = data.error || `Failed to send test ${target} notification.`;
     alertEl.classList.remove('hidden');
   } else {
-    okEl.textContent = data.message || 'Test email sent.';
+    okEl.textContent = data.message || `Test ${target} notification sent.`;
     okEl.classList.remove('hidden');
   }
+}
+
+// ===== In-app alert WebSocket toasts =====
+
+function initAlertsWebSocket() {
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/ws/alerts`);
+    ws.onmessage = e => {
+      try { showAlertToast(JSON.parse(e.data)); } catch {}
+    };
+    ws.onclose = () => setTimeout(connect, 5000);
+  }
+  connect();
+}
+
+function showAlertToast(d) {
+  const container = document.getElementById('alert-toasts');
+  if (!container) return;
+  const card = document.createElement('div');
+  card.className = 'alert-toast';
+  card.innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">` +
+      `<div>` +
+        `<div style="font-weight:600;font-size:13px;margin-bottom:2px;">${d.subject || 'Alert'}</div>` +
+        `<div style="font-size:12px;color:var(--text-2);">${d.details || ''}</div>` +
+        `<div style="font-size:11px;color:var(--text-3);margin-top:3px;">${d.hostname || ''} &middot; ${d.time || ''}</div>` +
+      `</div>` +
+      `<button onclick="this.closest('.alert-toast').remove()" style="background:none;border:none;color:var(--text-3);cursor:pointer;flex-shrink:0;padding:0;line-height:1;font-size:14px;">✕</button>` +
+    `</div>`;
+  container.appendChild(card);
+  setTimeout(() => { if (card.parentNode) card.remove(); }, 10000);
 }
 
 // ===== Storage unit formatter =====
@@ -10662,6 +11024,46 @@ function roleBadge(role) {
 }
 
 // ===== OS Updates =====
+
+function _renderUpdatePackages(data) {
+  const status    = document.getElementById('updates-status');
+  const pkgList   = document.getElementById('updates-pkg-list');
+  const installBtn = document.getElementById('btn-apply-updates');
+  if (data.count === 0) {
+    status.innerHTML = '<span style="color:var(--accent-ok);">✔ System is up to date.</span>';
+    pkgList.style.display = 'none';
+    if (installBtn) installBtn.classList.add('hidden');
+    return;
+  }
+  if (installBtn) installBtn.classList.remove('hidden');
+  status.innerHTML = `<span style="color:var(--accent-warn);">⬆ ${data.count} package${data.count===1?'':'s'} available for upgrade.</span>`;
+  const _typePriority = {security:0, zfsnas:1, regular:2};
+  const sorted = [...data.packages].sort((a, b) => {
+    const pa = _typePriority[a.type] ?? 2, pb = _typePriority[b.type] ?? 2;
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+  document.getElementById('updates-pkg-tbody').innerHTML = sorted.map(p => {
+    const typeBadge =
+      p.type === 'security'
+        ? `<span style="background:rgba(255,59,48,0.15);color:#ff3b30;border:1px solid rgba(255,59,48,0.35);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">security</span>`
+      : p.type === 'zfsnas'
+        ? `<span style="background:rgba(10,132,255,0.15);color:#0a84ff;border:1px solid rgba(10,132,255,0.35);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;">zfs/nas</span>`
+      : `<span style="color:var(--text-3);font-size:12px;">regular</span>`;
+    return `<tr>
+      <td style="font-family:monospace;font-size:13px;">${esc(p.name)}</td>
+      <td style="font-size:13px;color:var(--text-3);font-family:monospace;">${esc(p.current_version||'—')}</td>
+      <td style="font-size:13px;color:var(--accent-2);font-family:monospace;">${esc(p.version)}</td>
+      <td>${typeBadge}</td>
+    </tr>`;
+  }).join('');
+  if (data.checked_at) {
+    const d = new Date(data.checked_at);
+    document.getElementById('updates-checked-at').textContent = 'Last checked: ' + d.toLocaleString();
+  }
+  pkgList.style.display = '';
+}
+
 function initUpdatesPage() {
   // Reset OS log but don't auto-check (apt-get update is slow).
   document.getElementById('updates-log-wrap').style.display = 'none';
@@ -10671,6 +11073,22 @@ function initUpdatesPage() {
   // Sync toggle state from appSettings.
   const toggle = document.getElementById('live-update-toggle');
   if (toggle) toggle.checked = !!appSettings.live_update_enabled;
+  // Load OS name/version from /etc/os-release.
+  fetch('/api/os-info').then(r => r.json()).then(d => {
+    const el = document.getElementById('os-info-line');
+    if (!el) return;
+    const name    = d.name    || 'Linux';
+    const version = d.version || '';
+    el.textContent = 'You are running ' + name + (version ? ' Version ' + version : '') + '.';
+  }).catch(() => {
+    const el = document.getElementById('os-info-line');
+    if (el) el.textContent = 'System packages via apt-get';
+  });
+  // Populate table from persisted cache immediately (no apt-get call needed).
+  fetch('/api/updates/cache').then(r => r.ok ? r.json() : null).then(data => {
+    if (!data || data.count === 0) return;
+    _renderUpdatePackages(data);
+  }).catch(() => {});
 }
 
 // ── Version cache (localStorage, max once per day) ──────────────────────────
@@ -10765,8 +11183,10 @@ async function checkUpdates() {
   const btn = document.getElementById('btn-check-updates');
   const status = document.getElementById('updates-status');
   const pkgList = document.getElementById('updates-pkg-list');
+  const installBtn = document.getElementById('btn-apply-updates');
   btn.disabled = true;
   btn.textContent = 'Checking…';
+  if (installBtn) installBtn.classList.add('hidden');
   status.textContent = 'Running apt-get update and checking for upgrades…';
   pkgList.style.display = 'none';
 
@@ -10775,16 +11195,8 @@ async function checkUpdates() {
     const data = await resp.json();
     if (!resp.ok) { status.textContent = 'Error: ' + (data.error || 'unknown'); return; }
 
-    if (data.count === 0) {
-      status.innerHTML = '<span style="color:var(--accent-ok);">✔ System is up to date.</span>';
-    } else {
-      status.innerHTML = `<span style="color:var(--accent-warn);">⬆ ${data.count} package${data.count===1?'':'s'} available for upgrade.</span>`;
-      const tbody = document.getElementById('updates-pkg-tbody');
-      tbody.innerHTML = data.packages.map(p =>
-        `<tr><td style="font-family:monospace;font-size:13px;">${esc(p.name)}</td><td style="font-size:13px;color:var(--accent-2);">${esc(p.version)}</td></tr>`
-      ).join('');
-      pkgList.style.display = '';
-    }
+    data.checked_at = data.checked_at || new Date().toISOString();
+    _renderUpdatePackages(data);
   } catch(e) {
     status.textContent = 'Error: ' + e.message;
   } finally {
@@ -12018,7 +12430,7 @@ async function loadKeyMgmtSettings() {
       el.innerHTML = '<div style="color:var(--text-3);font-size:13px;">No encryption keys stored. Generate or import a key to get started.</div>';
       return;
     }
-    el.innerHTML = `<table style="width:100%;"><thead><tr>
+    el.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;min-width:360px;"><thead><tr>
       <th>Name</th><th>Created</th><th>Used By</th><th style="width:32px;"></th>
     </tr></thead><tbody>` +
     keys.map(k => {
@@ -12049,7 +12461,7 @@ async function loadKeyMgmtSettings() {
           </div>
         </td>
       </tr>`;
-    }).join('') + '</tbody></table>';
+    }).join('') + '</tbody></table></div>';
   } catch {
     el.innerHTML = '<div style="color:var(--accent-danger);font-size:13px;">Failed to load keys.</div>';
   }

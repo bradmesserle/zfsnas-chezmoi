@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
+	"strings"
 	"sync"
 	"time"
 	"zfsnas/internal/alerts"
@@ -23,9 +26,8 @@ func HandleGetAlerts(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, "failed to load alert config")
 		return
 	}
-	// Never send the real password over the wire — replace with a fixed mask.
-	if cfg.SMTP.Password != "" {
-		cfg.SMTP.Password = smtpPasswordMask
+	if cfg.Email.SMTP.Password != "" {
+		cfg.Email.SMTP.Password = smtpPasswordMask
 	}
 	jsonOK(w, cfg)
 }
@@ -37,14 +39,13 @@ func HandleUpdateAlerts(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	// If the UI sent back the mask unchanged, preserve the existing password.
-	if cfg.SMTP.Password == smtpPasswordMask {
+	// Preserve existing SMTP password when the UI sends back the mask.
+	if cfg.Email.SMTP.Password == smtpPasswordMask {
 		existing, err := alerts.Load()
-		if err == nil && existing.SMTP.Password != "" {
-			// Re-encrypt the plaintext we just decrypted so Save() stores it properly.
-			cfg.SMTP.Password = existing.SMTP.Password
+		if err == nil && existing.Email.SMTP.Password != "" {
+			cfg.Email.SMTP.Password = existing.Email.SMTP.Password
 		} else {
-			cfg.SMTP.Password = ""
+			cfg.Email.SMTP.Password = ""
 		}
 	}
 	if err := alerts.Save(&cfg); err != nil {
@@ -57,29 +58,93 @@ func HandleUpdateAlerts(w http.ResponseWriter, r *http.Request) {
 		Role:    sess.Role,
 		Action:  audit.ActionUpdateSettings,
 		Result:  audit.ResultOK,
-		Details: "alert settings updated",
+		Details: "notification settings updated",
 	})
-	jsonOK(w, map[string]string{"message": "alert settings saved"})
+	jsonOK(w, map[string]string{"message": "notification settings saved"})
 }
 
-// HandleTestAlert sends a test email using the current SMTP configuration.
+// HandleTestAlert sends a test alert to all currently enabled targets.
 func HandleTestAlert(w http.ResponseWriter, r *http.Request) {
 	if err := alerts.Send(
+		alerts.EventTest,
 		"Test Alert",
 		"Manual Test",
-		"This is a test alert sent from the ZFS NAS management portal.",
+		"This is a test alert from the ZFS NAS management portal.",
 	); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "failed to dispatch test alerts: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "test alert dispatched to all enabled targets"})
+}
+
+// HandleTestAlertEmail sends a test email regardless of the enabled flag.
+func HandleTestAlertEmail(w http.ResponseWriter, r *http.Request) {
+	if err := alerts.TestEmail(); err != nil {
 		jsonErr(w, http.StatusBadGateway, "failed to send test email: "+err.Error())
 		return
 	}
 	jsonOK(w, map[string]string{"message": "test email sent"})
 }
 
+// HandleTestAlertNtfy sends a test ntfy notification.
+func HandleTestAlertNtfy(w http.ResponseWriter, r *http.Request) {
+	if err := alerts.TestNtfy(); err != nil {
+		jsonErr(w, http.StatusBadGateway, "failed to send test ntfy notification: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "test ntfy notification sent"})
+}
+
+// HandleTestAlertGotify sends a test Gotify notification.
+func HandleTestAlertGotify(w http.ResponseWriter, r *http.Request) {
+	if err := alerts.TestGotify(); err != nil {
+		jsonErr(w, http.StatusBadGateway, "failed to send test Gotify notification: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "test Gotify notification sent"})
+}
+
+// HandleTestAlertPushover sends a test Pushover notification.
+func HandleTestAlertPushover(w http.ResponseWriter, r *http.Request) {
+	if err := alerts.TestPushover(); err != nil {
+		jsonErr(w, http.StatusBadGateway, "failed to send test Pushover notification: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "test Pushover notification sent"})
+}
+
+// HandleTestAlertSyslog sends a test syslog message.
+func HandleTestAlertSyslog(w http.ResponseWriter, r *http.Request) {
+	if err := alerts.TestSyslog(); err != nil {
+		jsonErr(w, http.StatusBadGateway, "failed to send test syslog message: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "test syslog message sent"})
+}
+
+// HandleTestAlertWebSocket broadcasts a test notification to all connected browser sessions.
+func HandleTestAlertWebSocket(w http.ResponseWriter, r *http.Request) {
+	alerts.TestWebSocket()
+	jsonOK(w, map[string]string{"message": "test in-app notification broadcast"})
+}
+
+// HandleAlertsWS upgrades the connection and registers it with the AlertsHub.
+func HandleAlertsWS(w http.ResponseWriter, r *http.Request) {
+	hub := alerts.GetHub()
+	if hub == nil {
+		jsonErr(w, http.StatusServiceUnavailable, "alerts websocket hub not initialised")
+		return
+	}
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	hub.Register(conn)
+}
+
 const alertDedup = 24 * time.Hour
 
-// isSmartUnsupported returns true when a disk has no genuine SMART failure —
-// either SMART is not supported by the hardware, smartctl is unavailable,
-// or the SMART cache has not been populated yet (zero-value SmartMsg).
+// isSmartUnsupported returns true when a disk has no genuine SMART failure.
 func isSmartUnsupported(msg string) bool {
 	switch msg {
 	case "", "Not supported", "smartctl unavailable", "parse error":
@@ -98,24 +163,15 @@ func isBadPoolHealth(h string) bool {
 }
 
 // ── Shared health-event state ─────────────────────────────────────────────────
-//
-// These maps are shared between the background poller and pool operation handlers
-// so that recovery events are written immediately when a fix action completes,
-// not only at the next 5-minute poll cycle. The shared state also ensures the
-// poller does not write a duplicate event for a transition already recorded by a
-// handler.
 
 var (
-	healthEvMu           sync.Mutex
-	healthEvPoolStates   = map[string]string{}   // pool name → last known health
-	healthEvMemberStates = map[string][]string{} // pool name → last known per-member statuses
-	smtpLastPoolHealths  = map[string]string{}   // pool name → health at last SMTP send
+	healthEvMu             sync.Mutex
+	healthEvPoolStates     = map[string]string{}
+	healthEvMemberStates   = map[string][]string{}
+	lastNotifiedPoolHealth = map[string]string{} // pool name → health at last notification send
 )
 
-// LogPoolHealthEvents checks whether a pool's health or member disk statuses
-// have changed since the last call and writes audit entries for every transition.
-// It is safe to call from multiple goroutines and is idempotent for the same
-// state — calling it twice with an unchanged pool writes nothing.
+// LogPoolHealthEvents checks for pool/disk state changes and writes audit entries.
 func LogPoolHealthEvents(pool *system.Pool) {
 	if pool == nil {
 		return
@@ -123,14 +179,12 @@ func LogPoolHealthEvents(pool *system.Pool) {
 	healthEvMu.Lock()
 	defer healthEvMu.Unlock()
 
-	// ── Pool-level health ─────────────────────────────────────────────────────
 	prevHealth := healthEvPoolStates[pool.Name]
 	currHealth := pool.Health
 	currBad    := isBadPoolHealth(currHealth)
 	prevBad    := isBadPoolHealth(prevHealth)
 
 	if currBad && prevHealth != currHealth {
-		// New problem, or health worsened (e.g. DEGRADED → FAULTED).
 		audit.Log(audit.Entry{
 			User:    "system",
 			Role:    "system",
@@ -140,7 +194,6 @@ func LogPoolHealthEvents(pool *system.Pool) {
 			Details: "pool health: " + currHealth,
 		})
 	} else if !currBad && prevBad {
-		// Pool has recovered.
 		audit.Log(audit.Entry{
 			User:    "system",
 			Role:    "system",
@@ -152,7 +205,6 @@ func LogPoolHealthEvents(pool *system.Pool) {
 	}
 	healthEvPoolStates[pool.Name] = currHealth
 
-	// ── Per-member disk status ────────────────────────────────────────────────
 	prevStatuses := healthEvMemberStates[pool.Name]
 	for i, currStatus := range pool.MemberStatuses {
 		var prevStatus string
@@ -166,7 +218,7 @@ func LogPoolHealthEvents(pool *system.Pool) {
 			dev = pool.Members[i]
 		}
 		currDiskBad := currStatus != "ONLINE"
-		prevDiskBad := prevStatus != "ONLINE" && prevStatus != "" // empty = first run
+		prevDiskBad := prevStatus != "ONLINE" && prevStatus != ""
 
 		if currDiskBad && prevStatus != currStatus {
 			audit.Log(audit.Entry{
@@ -192,28 +244,58 @@ func LogPoolHealthEvents(pool *system.Pool) {
 }
 
 // StartHealthPoller launches a background goroutine that checks pool health
-// and disk wearout every 5 minutes, fires SMTP alert emails on threshold
-// breaches, and calls LogPoolHealthEvents for each pool to write audit entries.
+// and disk wearout every 5 minutes and dispatches alerts to all enabled targets.
 func StartHealthPoller(configDir string) {
 	go func() {
-		lastWearoutAlerted := map[string]time.Time{}
-		lastSmartAlerted   := map[string]time.Time{}
+		lastWearoutAlerted  := map[string]time.Time{}
+		lastSmartAlerted    := map[string]time.Time{}
+		lastScrubState      := map[string]string{}   // pool → last seen scrub state
+		lastSecUpdatesCheck := time.Time{}
+		secUpdatesArmed     := true // fires on first occurrence; re-arms once updates are gone
 
-		// Brief delay so the server is fully up before the first check.
 		time.Sleep(30 * time.Second)
-		runHealthCheck(lastWearoutAlerted, lastSmartAlerted, configDir)
+		runHealthCheck(lastWearoutAlerted, lastSmartAlerted, lastScrubState, &lastSecUpdatesCheck, &secUpdatesArmed, configDir)
 
 		tick := time.NewTicker(5 * time.Minute)
 		defer tick.Stop()
 		for range tick.C {
-			runHealthCheck(lastWearoutAlerted, lastSmartAlerted, configDir)
+			runHealthCheck(lastWearoutAlerted, lastSmartAlerted, lastScrubState, &lastSecUpdatesCheck, &secUpdatesArmed, configDir)
 		}
 	}()
 }
 
+// anyTargetWantsEvent returns true if at least one enabled target subscribes to the event.
+func anyTargetWantsEvent(cfg *alerts.AlertConfig, key alerts.EventKey) bool {
+	targets := []struct {
+		enabled bool
+		ev      alerts.EventConfig
+	}{
+		{cfg.Email.Enabled,     cfg.Email.Events},
+		{cfg.Ntfy.Enabled,      cfg.Ntfy.Events},
+		{cfg.Gotify.Enabled,    cfg.Gotify.Events},
+		{cfg.Pushover.Enabled,  cfg.Pushover.Events},
+		{cfg.Syslog.Enabled,    cfg.Syslog.Events},
+		{cfg.WebSocket.Enabled, cfg.WebSocket.Events},
+	}
+	for _, t := range targets {
+		if t.enabled {
+			// reuse the same matchesEvent logic via a temporary Send-like check
+			ev := t.ev
+			switch key {
+			case alerts.EventSmartError:      if ev.SmartError      { return true }
+			case alerts.EventWearoutExceeded: if ev.WearoutExceeded { return true }
+			}
+		}
+	}
+	return false
+}
+
 func runHealthCheck(
-	lastWearoutAlerted map[string]time.Time,
-	lastSmartAlerted   map[string]time.Time,
+	lastWearoutAlerted  map[string]time.Time,
+	lastSmartAlerted    map[string]time.Time,
+	lastScrubState      map[string]string,
+	lastSecUpdatesCheck *time.Time,
+	secUpdatesArmed     *bool,
 	configDir string,
 ) {
 	cfg, err := alerts.Load()
@@ -222,78 +304,75 @@ func runHealthCheck(
 		return
 	}
 
-	// --- Pool health + disk member status ---
+	// --- Pool health ---
 	pools, err := system.GetAllPools()
 	if err == nil {
 		for _, pool := range pools {
-			// Capture health before the LogPoolHealthEvents call for SMTP dedup.
 			healthEvMu.Lock()
-			prevSmtp := smtpLastPoolHealths[pool.Name]
+			prevNotified := lastNotifiedPoolHealth[pool.Name]
 			healthEvMu.Unlock()
 
 			LogPoolHealthEvents(pool)
 
-			// SMTP alert for pool degradation — only when health changed to bad.
-			if cfg.Events.PoolDegraded && isBadPoolHealth(pool.Health) && prevSmtp != pool.Health {
+			if isBadPoolHealth(pool.Health) && prevNotified != pool.Health {
 				healthEvMu.Lock()
-				smtpLastPoolHealths[pool.Name] = pool.Health
+				lastNotifiedPoolHealth[pool.Name] = pool.Health
 				healthEvMu.Unlock()
-				go func(h, name string) {
-					if err := alerts.Send(
+				name, h := pool.Name, pool.Health
+				go func() {
+					alerts.Send(
+						alerts.EventPoolDegraded,
 						"Pool health: "+h,
 						"Pool Health Degraded",
 						fmt.Sprintf("Pool '%s' is in state: %s", name, h),
-					); err != nil {
-						log.Printf("alerts: send failed: %v", err)
-					}
-				}(pool.Health, pool.Name)
+					)
+				}()
 			}
 		}
 	}
 
 	// --- Disk SMART + wearout ---
-	if cfg.Events.SmartError || cfg.Events.WearoutExceeded {
-		disks, err := system.ListDisks(configDir)
-		if err != nil {
+	checkSmart   := anyTargetWantsEvent(cfg, alerts.EventSmartError)
+	checkWearout := anyTargetWantsEvent(cfg, alerts.EventWearoutExceeded)
+	_, wearThr   := alerts.MinWearoutThreshold(cfg)
+
+	if checkSmart || checkWearout {
+		disks, diskErr := system.ListDisks(configDir)
+		if diskErr != nil {
 			return
 		}
 		now := time.Now()
+
 		for _, d := range disks {
-			// SMART error — skip if SMART is unsupported or cache not ready,
-			// and suppress repeated alerts for the same disk within 24 hours.
-			if cfg.Events.SmartError && !d.SmartOK && !isSmartUnsupported(d.SmartMsg) {
+			if checkSmart && !d.SmartOK && !isSmartUnsupported(d.SmartMsg) {
 				if last, seen := lastSmartAlerted[d.Name]; !seen || now.Sub(last) >= alertDedup {
 					lastSmartAlerted[d.Name] = now
 					name, msg := d.Name, d.SmartMsg
 					go func() {
-						if err := alerts.Send(
+						alerts.Send(
+							alerts.EventSmartError,
 							"SMART error on "+name,
 							"SMART Error Detected",
 							fmt.Sprintf("Disk %s reports a SMART error: %s", name, msg),
-						); err != nil {
-							log.Printf("alerts: send failed: %v", err)
-						}
+						)
 					}()
 				}
 			} else if d.SmartOK {
 				delete(lastSmartAlerted, d.Name)
 			}
 
-			// Wearout threshold — suppress repeated alerts within 24 hours.
-			if cfg.Events.WearoutExceeded && cfg.Events.WearoutThresholdPct > 0 && d.WearoutPct != nil {
-				thr := cfg.Events.WearoutThresholdPct
-				if *d.WearoutPct >= thr {
+			if checkWearout && wearThr > 0 && d.WearoutPct != nil {
+				if *d.WearoutPct >= wearThr {
 					if last, seen := lastWearoutAlerted[d.Name]; !seen || now.Sub(last) >= alertDedup {
 						lastWearoutAlerted[d.Name] = now
 						name, pct := d.Name, *d.WearoutPct
 						go func() {
-							if err := alerts.Send(
+							alerts.Send(
+								alerts.EventWearoutExceeded,
 								fmt.Sprintf("Disk wearout: %s at %d%%", name, pct),
 								"Disk Wearout Threshold Exceeded",
-								fmt.Sprintf("Disk %s has reached %d%% wearout (threshold: %d%%)", name, pct, thr),
-							); err != nil {
-								log.Printf("alerts: send failed: %v", err)
-							}
+								fmt.Sprintf("Disk %s has reached %d%% wearout (threshold: %d%%)", name, pct, wearThr),
+							)
 						}()
 					}
 				} else {
@@ -304,19 +383,83 @@ func runHealthCheck(
 	}
 
 	// --- Failed login threshold ---
-	if cfg.Events.FailedLoginAlert && cfg.Events.FailedLoginThreshold > 0 {
+	enabled, threshold := alerts.MinFailedLoginThreshold(cfg)
+	if enabled && threshold > 0 {
 		count := alerts.FailedLoginCount()
-		if count >= int64(cfg.Events.FailedLoginThreshold) {
+		if count >= int64(threshold) {
 			alerts.ResetFailedLogins()
 			go func(n int64) {
-				if err := alerts.Send(
+				alerts.Send(
+					alerts.EventFailedLogin,
 					fmt.Sprintf("Failed logins: %d attempts", n),
 					"Failed Login Threshold Exceeded",
 					fmt.Sprintf("%d failed login attempts were detected since the last reset.", n),
-				); err != nil {
-					log.Printf("alerts: send failed: %v", err)
-				}
+				)
 			}(count)
+		}
+	}
+
+	// --- Scrub errors — detect transition from running → finished with errors > 0 ---
+	if anyTargetWantsEvent(cfg, alerts.EventScrubErrors) {
+		pools, err := system.GetAllPools()
+		if err == nil {
+			for _, pool := range pools {
+				info, err := system.GetScrubStatus(pool.Name)
+				if err != nil || info == nil {
+					continue
+				}
+				prev := lastScrubState[pool.Name]
+				lastScrubState[pool.Name] = info.State
+				if prev == "running" && info.State == "finished" && info.Errors > 0 {
+					name, errs := pool.Name, info.Errors
+					go func() {
+						alerts.Send(
+							alerts.EventScrubErrors,
+							fmt.Sprintf("Scrub errors on pool %s", name),
+							"ZFS Scrub Completed With Errors",
+							fmt.Sprintf("Pool '%s' scrub finished with %d error(s). Run 'zpool status %s' for details.", name, errs, name),
+						)
+					}()
+				}
+			}
+		}
+	}
+
+	// --- Security updates — daily check; fires once, re-arms only when updates clear ---
+	if anyTargetWantsEvent(cfg, alerts.EventSecurityUpdates) && time.Since(*lastSecUpdatesCheck) >= 24*time.Hour {
+		*lastSecUpdatesCheck = time.Now()
+		out, err := exec.Command("apt-get", "--simulate", "upgrade").Output()
+		if err == nil {
+			var secPkgs []string
+			scanner := bufio.NewScanner(strings.NewReader(string(out)))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.HasPrefix(line, "Inst ") && strings.Contains(line, "-security") {
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						secPkgs = append(secPkgs, parts[1])
+					}
+				}
+			}
+			if len(secPkgs) > 0 {
+				// Only notify if armed (i.e. we haven't already fired for this batch).
+				if *secUpdatesArmed {
+					*secUpdatesArmed = false
+					count := len(secPkgs)
+					list := strings.Join(secPkgs, ", ")
+					go func() {
+						alerts.Send(
+							alerts.EventSecurityUpdates,
+							fmt.Sprintf("%d security update(s) available", count),
+							"OS Security Updates Available",
+							fmt.Sprintf("%d security package(s) have updates available: %s", count, list),
+						)
+					}()
+				}
+			} else {
+				// No pending security updates — re-arm so the next occurrence fires.
+				*secUpdatesArmed = true
+			}
 		}
 	}
 }

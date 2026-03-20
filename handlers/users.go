@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"zfsnas/internal/alerts"
 	"zfsnas/internal/audit"
 	"zfsnas/internal/config"
 
@@ -160,6 +161,12 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		Result:  audit.ResultOK,
 		Details: "role: " + req.Role,
 	})
+	go alerts.Send(
+		alerts.EventUserCreated,
+		"User created: "+req.Username,
+		"User Account Created",
+		"User '"+req.Username+"' (role: "+req.Role+") was created by "+sess.Username+".",
+	)
 
 	jsonCreated(w, map[string]string{"id": user.ID, "username": user.Username})
 }
@@ -287,6 +294,12 @@ func HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		Target: username,
 		Result: audit.ResultOK,
 	})
+	go alerts.Send(
+		alerts.EventUserCreated,
+		"User deleted: "+username,
+		"User Account Deleted",
+		"User '"+username+"' was deleted by "+sess.Username+".",
+	)
 
 	jsonOK(w, map[string]string{"message": "user deleted"})
 }

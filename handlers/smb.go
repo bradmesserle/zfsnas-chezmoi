@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"zfsnas/internal/alerts"
 	"zfsnas/internal/audit"
 	"zfsnas/internal/config"
 	"zfsnas/system"
@@ -106,6 +107,12 @@ func HandleCreateShare(w http.ResponseWriter, r *http.Request) {
 		Target: req.Name,
 		Result: audit.ResultOK,
 	})
+	go alerts.Send(
+		alerts.EventShareCreated,
+		"SMB share created: "+req.Name,
+		"SMB Share Created",
+		"SMB share '"+req.Name+"' (path: "+req.Path+") was created by "+sess.Username+".",
+	)
 	jsonCreated(w, req)
 }
 
@@ -260,5 +267,11 @@ func HandleDeleteShare(w http.ResponseWriter, r *http.Request) {
 		Target: name,
 		Result: audit.ResultOK,
 	})
+	go alerts.Send(
+		alerts.EventShareCreated,
+		"SMB share deleted: "+name,
+		"SMB Share Deleted",
+		"SMB share '"+name+"' was deleted by "+sess.Username+".",
+	)
 	jsonOK(w, map[string]string{"message": "share deleted"})
 }

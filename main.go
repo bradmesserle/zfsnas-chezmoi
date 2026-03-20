@@ -77,6 +77,8 @@ func main() {
 
 	// ===== Alerts =====
 	alerts.Init(absConfig)
+	alertsHub := alerts.NewAlertsHub()
+	alerts.SetWSHub(alertsHub)
 
 	// ===== Scheduler =====
 	scheduler.Init(absConfig)

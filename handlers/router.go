@@ -213,8 +213,12 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTerminal)))).Methods("GET")
 
 	// --- OS Updates (admin only) ---
+	r.Handle("/api/os-info",
+		RequireAuth(http.HandlerFunc(HandleOSInfo))).Methods("GET")
 	r.Handle("/api/updates/check",
-		RequireAuth(RequireAdmin(http.HandlerFunc(HandleCheckUpdates)))).Methods("GET")
+		RequireAuth(RequireAdmin(HandleCheckUpdates(appCfg)))).Methods("GET")
+	r.Handle("/api/updates/cache",
+		RequireAuth(RequireAdmin(HandleGetUpdateCache(appCfg)))).Methods("GET")
 	r.Handle("/ws/updates-apply",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleApplyUpdates)))).Methods("GET")
 
@@ -327,6 +331,22 @@ func NewRouter(staticFS fs.FS, readFile func(string) ([]byte, error), appCfg *co
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleUpdateAlerts)))).Methods("PUT")
 	r.Handle("/api/alerts/test",
 		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlert)))).Methods("POST")
+	r.Handle("/api/alerts/test/email",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlertEmail)))).Methods("POST")
+	r.Handle("/api/alerts/test/ntfy",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlertNtfy)))).Methods("POST")
+	r.Handle("/api/alerts/test/gotify",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlertGotify)))).Methods("POST")
+	r.Handle("/api/alerts/test/pushover",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlertPushover)))).Methods("POST")
+	r.Handle("/api/alerts/test/syslog",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlertSyslog)))).Methods("POST")
+	r.Handle("/api/alerts/test/websocket",
+		RequireAuth(RequireAdmin(http.HandlerFunc(HandleTestAlertWebSocket)))).Methods("POST")
+
+	// WebSocket: real-time in-app alert notifications
+	r.Handle("/ws/alerts",
+		RequireAuth(http.HandlerFunc(HandleAlertsWS))).Methods("GET")
 
 	// --- Disk I/O metrics ---
 	r.Handle("/api/sysinfo/diskio",

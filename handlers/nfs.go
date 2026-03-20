@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"zfsnas/internal/alerts"
 	"zfsnas/internal/audit"
 	"zfsnas/internal/config"
 	"zfsnas/system"
@@ -95,6 +96,12 @@ func HandleCreateNFSShare(w http.ResponseWriter, r *http.Request) {
 		Target: req.Path,
 		Result: audit.ResultOK,
 	})
+	go alerts.Send(
+		alerts.EventShareCreated,
+		"NFS share created: "+req.Path,
+		"NFS Share Created",
+		"NFS export '"+req.Path+"' (client: "+req.Client+") was created by "+sess.Username+".",
+	)
 	jsonCreated(w, req)
 }
 
@@ -184,5 +191,11 @@ func HandleDeleteNFSShare(w http.ResponseWriter, r *http.Request) {
 		Target: target,
 		Result: audit.ResultOK,
 	})
+	go alerts.Send(
+		alerts.EventShareCreated,
+		"NFS share deleted: "+target,
+		"NFS Share Deleted",
+		"NFS export '"+target+"' was deleted by "+sess.Username+".",
+	)
 	jsonOK(w, map[string]string{"message": "NFS share removed"})
 }

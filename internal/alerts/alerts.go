@@ -7,14 +7,56 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
+	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 	"zfsnas/internal/secret"
 )
+
+// ── Event keys ────────────────────────────────────────────────────────────────
+
+type EventKey string
+
+const (
+	EventPoolDegraded    EventKey = "pool_degraded"
+	EventSmartError      EventKey = "smart_error"
+	EventWearoutExceeded EventKey = "wearout_exceeded"
+	EventFailedLogin     EventKey = "failed_login_alert"
+	EventSecurityUpdates EventKey = "security_updates"
+	EventScrubErrors     EventKey = "scrub_errors"
+	EventSnapshotFailure EventKey = "snapshot_failure"
+	EventUserCreated     EventKey = "user_created_deleted"
+	EventShareCreated    EventKey = "share_created_deleted"
+	EventTest            EventKey = "test" // always passes filter
+)
+
+// matchesEvent reports whether the event key is enabled in the given EventConfig.
+func matchesEvent(key EventKey, ev EventConfig) bool {
+	if key == EventTest {
+		return true
+	}
+	switch key {
+	case EventPoolDegraded:    return ev.PoolDegraded
+	case EventSmartError:      return ev.SmartError
+	case EventWearoutExceeded: return ev.WearoutExceeded
+	case EventFailedLogin:     return ev.FailedLoginAlert
+	case EventSecurityUpdates: return ev.SecurityUpdates
+	case EventScrubErrors:     return ev.ScrubErrors
+	case EventSnapshotFailure: return ev.SnapshotFailure
+	case EventUserCreated:     return ev.UserCreatedDeleted
+	case EventShareCreated:    return ev.ShareCreatedDeleted
+	}
+	return false
+}
+
+// ── Config types ──────────────────────────────────────────────────────────────
 
 // SMTPConfig holds SMTP connection parameters.
 type SMTPConfig struct {
@@ -26,7 +68,7 @@ type SMTPConfig struct {
 	Password string `json:"password"`
 }
 
-// EventConfig holds per-event alert subscription flags and thresholds.
+// EventConfig holds per-event subscription flags and thresholds.
 type EventConfig struct {
 	PoolDegraded         bool `json:"pool_degraded"`
 	SmartError           bool `json:"smart_error"`
@@ -41,19 +83,79 @@ type EventConfig struct {
 	ShareCreatedDeleted  bool `json:"share_created_deleted"`
 }
 
+type EmailTarget struct {
+	Enabled bool        `json:"enabled"`
+	SMTP    SMTPConfig  `json:"smtp"`
+	To      []string    `json:"to"`
+	Events  EventConfig `json:"events"`
+}
+
+type NtfyTarget struct {
+	Enabled  bool        `json:"enabled"`
+	URL      string      `json:"url"`      // full topic URL, e.g. https://ntfy.sh/mytopic
+	Token    string      `json:"token"`    // optional Bearer token
+	Priority string      `json:"priority"` // default | low | high | urgent
+	Events   EventConfig `json:"events"`
+}
+
+type GotifyTarget struct {
+	Enabled  bool        `json:"enabled"`
+	URL      string      `json:"url"`      // server root, e.g. https://gotify.example.com
+	Token    string      `json:"token"`    // app token
+	Priority int         `json:"priority"` // 1–10
+	Events   EventConfig `json:"events"`
+}
+
+type PushoverTarget struct {
+	Enabled  bool        `json:"enabled"`
+	UserKey  string      `json:"user_key"`
+	APIToken string      `json:"api_token"`
+	Device   string      `json:"device"`   // optional; blank = all devices
+	Priority int         `json:"priority"` // -2 to 2
+	Events   EventConfig `json:"events"`
+}
+
+type SyslogTarget struct {
+	Enabled  bool        `json:"enabled"`
+	Host     string      `json:"host"`
+	Port     int         `json:"port"`      // default 514
+	Protocol string      `json:"protocol"`  // udp | tcp
+	Facility string      `json:"facility"`  // user | daemon | local0–local7
+	Tag      string      `json:"tag"`       // syslog tag / app name
+	Events   EventConfig `json:"events"`
+}
+
+// WebSocketTarget broadcasts alert payloads to all browser sessions open in the portal.
+type WebSocketTarget struct {
+	Enabled bool        `json:"enabled"`
+	Events  EventConfig `json:"events"`
+}
+
 // AlertConfig is the root alert configuration persisted to alerts.json.
 type AlertConfig struct {
-	SMTP   SMTPConfig  `json:"smtp"`
-	To     []string    `json:"to"`
-	Events EventConfig `json:"events"`
+	Email     EmailTarget     `json:"email"`
+	Ntfy      NtfyTarget      `json:"ntfy"`
+	Gotify    GotifyTarget    `json:"gotify"`
+	Pushover  PushoverTarget  `json:"pushover"`
+	Syslog    SyslogTarget    `json:"syslog"`
+	WebSocket WebSocketTarget `json:"websocket"`
 }
+
+// ── Package-level state ───────────────────────────────────────────────────────
 
 var (
 	configDir    string
 	mu           sync.RWMutex
 	failedLogins int64
-	smtpKey      []byte // AES-256 key for SMTP password encryption
+	smtpKey      []byte
+	wsHub        *AlertsHub
 )
+
+// SetWSHub wires the in-app WebSocket broadcast hub.
+func SetWSHub(h *AlertsHub) { wsHub = h }
+
+// GetHub returns the registered AlertsHub (may be nil if not wired).
+func GetHub() *AlertsHub { return wsHub }
 
 // Init sets the config directory and loads (or creates) the SMTP encryption key.
 func Init(dir string) {
@@ -67,64 +169,104 @@ func Init(dir string) {
 	smtpKey = key
 }
 
-func defaultConfig() *AlertConfig {
-	return &AlertConfig{
-		SMTP: SMTPConfig{Port: 587, AuthMode: "starttls"},
-		Events: EventConfig{
-			PoolDegraded:         true,
-			SmartError:           true,
-			WearoutExceeded:      true,
-			WearoutThresholdPct:  80,
-			FailedLoginAlert:     true,
-			FailedLoginThreshold: 5,
-			ScrubErrors:          true,
-			SnapshotFailure:      true,
-		},
+func defaultEventConfig() EventConfig {
+	return EventConfig{
+		PoolDegraded:         true,
+		SmartError:           true,
+		WearoutExceeded:      true,
+		WearoutThresholdPct:  80,
+		FailedLoginAlert:     true,
+		FailedLoginThreshold: 5,
+		ScrubErrors:          true,
+		SnapshotFailure:      true,
 	}
 }
 
-// Load reads alert config from disk, returning defaults if the file does not exist.
-// If the SMTP password is encrypted, it is decrypted in the returned struct so
-// callers (e.g. the SMTP sender) always receive the plaintext value.
+func defaultConfig() *AlertConfig {
+	ev := defaultEventConfig()
+	return &AlertConfig{
+		Email:     EmailTarget{SMTP: SMTPConfig{Port: 587, AuthMode: "starttls"}, Events: ev},
+		Ntfy:      NtfyTarget{Priority: "default", Events: ev},
+		Gotify:    GotifyTarget{Priority: 5, Events: ev},
+		Pushover:  PushoverTarget{Events: ev},
+		Syslog:    SyslogTarget{Port: 514, Protocol: "udp", Facility: "daemon", Tag: "zfsnas", Events: ev},
+		WebSocket: WebSocketTarget{Events: ev},
+	}
+}
+
+// ── Load / Save ───────────────────────────────────────────────────────────────
+
+// Load reads alert config from disk. If the file is in the old format (root-level
+// smtp/to/events) it is automatically migrated to the new multi-target format.
 func Load() (*AlertConfig, error) {
-	mu.RLock()
-	defer mu.RUnlock()
-	cfg := defaultConfig()
 	path := filepath.Join(configDir, "alerts.json")
+
+	mu.RLock()
 	data, err := os.ReadFile(path)
+	mu.RUnlock()
+
 	if os.IsNotExist(err) {
-		return cfg, nil
+		return defaultConfig(), nil
 	}
 	if err != nil {
 		return nil, err
 	}
+
+	// Detect legacy format: has root-level "smtp" key but no "email" key.
+	var probe struct {
+		Email *json.RawMessage `json:"email"`
+	}
+	json.Unmarshal(data, &probe) //nolint:errcheck
+
+	if probe.Email == nil {
+		// Legacy migration.
+		var legacy struct {
+			SMTP   SMTPConfig  `json:"smtp"`
+			To     []string    `json:"to"`
+			Events EventConfig `json:"events"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return nil, err
+		}
+		cfg := defaultConfig()
+		cfg.Email.SMTP = legacy.SMTP
+		cfg.Email.To = legacy.To
+		cfg.Email.Events = legacy.Events
+		cfg.Email.Enabled = legacy.SMTP.Host != ""
+		if smtpKey != nil && secret.IsEncrypted(cfg.Email.SMTP.Password) {
+			if plain, decErr := secret.Decrypt(smtpKey, cfg.Email.SMTP.Password); decErr == nil {
+				cfg.Email.SMTP.Password = plain
+			}
+		}
+		go Save(cfg) // persist migration asynchronously
+		return cfg, nil
+	}
+
+	// New format.
+	cfg := defaultConfig()
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-	// Decrypt SMTP password if encrypted, silently keep plaintext for legacy configs.
-	if smtpKey != nil && secret.IsEncrypted(cfg.SMTP.Password) {
-		if plain, err := secret.Decrypt(smtpKey, cfg.SMTP.Password); err == nil {
-			cfg.SMTP.Password = plain
+	if smtpKey != nil && secret.IsEncrypted(cfg.Email.SMTP.Password) {
+		if plain, decErr := secret.Decrypt(smtpKey, cfg.Email.SMTP.Password); decErr == nil {
+			cfg.Email.SMTP.Password = plain
 		}
 	}
 	return cfg, nil
 }
 
 // Save persists alert config to disk, encrypting the SMTP password if a key is available.
-// If the password is already an encrypted blob (e.g. copied from an existing config),
-// it is written as-is without double-encrypting.
 func Save(cfg *AlertConfig) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Work on a shallow copy so we don't modify the caller's struct.
 	toWrite := *cfg
-	if smtpKey != nil && toWrite.SMTP.Password != "" && !secret.IsEncrypted(toWrite.SMTP.Password) {
-		enc, err := secret.Encrypt(smtpKey, toWrite.SMTP.Password)
+	if smtpKey != nil && toWrite.Email.SMTP.Password != "" && !secret.IsEncrypted(toWrite.Email.SMTP.Password) {
+		enc, err := secret.Encrypt(smtpKey, toWrite.Email.SMTP.Password)
 		if err != nil {
 			return fmt.Errorf("encrypt SMTP password: %w", err)
 		}
-		toWrite.SMTP.Password = enc
+		toWrite.Email.SMTP.Password = enc
 	}
 
 	path := filepath.Join(configDir, "alerts.json")
@@ -135,32 +277,178 @@ func Save(cfg *AlertConfig) error {
 	return os.WriteFile(path, data, 0640)
 }
 
-// RecordFailedLogin increments the failed-login counter.
-func RecordFailedLogin() {
-	atomic.AddInt64(&failedLogins, 1)
+// ── Failed login counter ──────────────────────────────────────────────────────
+
+func RecordFailedLogin()       { atomic.AddInt64(&failedLogins, 1) }
+func ResetFailedLogins()       { atomic.StoreInt64(&failedLogins, 0) }
+func FailedLoginCount() int64  { return atomic.LoadInt64(&failedLogins) }
+
+// ── Threshold helpers (used by health poller) ─────────────────────────────────
+
+// MinWearoutThreshold returns the lowest non-zero wearout threshold across all
+// enabled targets that have WearoutExceeded enabled, and whether any exist.
+func MinWearoutThreshold(cfg *AlertConfig) (enabled bool, pct int) {
+	for _, ev := range allEnabledEvents(cfg) {
+		if ev.WearoutExceeded && ev.WearoutThresholdPct > 0 {
+			if pct == 0 || ev.WearoutThresholdPct < pct {
+				pct = ev.WearoutThresholdPct
+				enabled = true
+			}
+		}
+	}
+	return
 }
 
-// ResetFailedLogins resets the counter to zero.
-func ResetFailedLogins() {
-	atomic.StoreInt64(&failedLogins, 0)
+// MinFailedLoginThreshold returns the lowest non-zero failed-login threshold
+// across all enabled targets that have FailedLoginAlert enabled.
+func MinFailedLoginThreshold(cfg *AlertConfig) (enabled bool, threshold int) {
+	for _, ev := range allEnabledEvents(cfg) {
+		if ev.FailedLoginAlert && ev.FailedLoginThreshold > 0 {
+			if threshold == 0 || ev.FailedLoginThreshold < threshold {
+				threshold = ev.FailedLoginThreshold
+				enabled = true
+			}
+		}
+	}
+	return
 }
 
-// FailedLoginCount returns the current failed-login count.
-func FailedLoginCount() int64 {
-	return atomic.LoadInt64(&failedLogins)
+func allEnabledEvents(cfg *AlertConfig) []EventConfig {
+	var evs []EventConfig
+	if cfg.Email.Enabled     { evs = append(evs, cfg.Email.Events) }
+	if cfg.Ntfy.Enabled      { evs = append(evs, cfg.Ntfy.Events) }
+	if cfg.Gotify.Enabled    { evs = append(evs, cfg.Gotify.Events) }
+	if cfg.Pushover.Enabled  { evs = append(evs, cfg.Pushover.Events) }
+	if cfg.Syslog.Enabled    { evs = append(evs, cfg.Syslog.Events) }
+	if cfg.WebSocket.Enabled { evs = append(evs, cfg.WebSocket.Events) }
+	return evs
 }
 
-// Send sends an HTML alert email with the given event name and detail text.
-// It is a no-op when SMTP is not configured or no recipients are set.
-func Send(subject, event, details string) error {
+// ── Dispatch ──────────────────────────────────────────────────────────────────
+
+// Send dispatches an alert to all enabled targets that subscribe to the given event key.
+func Send(key EventKey, subject, event, details string) error {
 	cfg, err := Load()
 	if err != nil {
 		return err
 	}
-	if cfg.SMTP.Host == "" || len(cfg.To) == 0 {
-		return nil
+	hostname, _ := os.Hostname()
+	now := time.Now().Format("2006-01-02 15:04:05 MST")
+
+	if cfg.Email.Enabled && matchesEvent(key, cfg.Email.Events) {
+		go func() {
+			if err := sendEmail(cfg, subject, event, details, hostname); err != nil {
+				log.Printf("[alerts/email] %v", err)
+			}
+		}()
+	}
+	if cfg.Ntfy.Enabled && matchesEvent(key, cfg.Ntfy.Events) {
+		go func() {
+			if err := sendNtfy(cfg.Ntfy, subject, event, details, hostname); err != nil {
+				log.Printf("[alerts/ntfy] %v", err)
+			}
+		}()
+	}
+	if cfg.Gotify.Enabled && matchesEvent(key, cfg.Gotify.Events) {
+		go func() {
+			if err := sendGotify(cfg.Gotify, subject, event, details, hostname); err != nil {
+				log.Printf("[alerts/gotify] %v", err)
+			}
+		}()
+	}
+	if cfg.Pushover.Enabled && matchesEvent(key, cfg.Pushover.Events) {
+		go func() {
+			if err := sendPushover(cfg.Pushover, subject, event, details, hostname); err != nil {
+				log.Printf("[alerts/pushover] %v", err)
+			}
+		}()
+	}
+	if cfg.Syslog.Enabled && matchesEvent(key, cfg.Syslog.Events) {
+		go func() {
+			if err := sendSyslogMsg(cfg.Syslog, subject, event, details, hostname); err != nil {
+				log.Printf("[alerts/syslog] %v", err)
+			}
+		}()
+	}
+	if cfg.WebSocket.Enabled && matchesEvent(key, cfg.WebSocket.Events) && wsHub != nil {
+		wsHub.BroadcastJSON(map[string]string{
+			"subject":  subject,
+			"event":    event,
+			"details":  details,
+			"hostname": hostname,
+			"time":     now,
+		})
+	}
+	return nil
+}
+
+// ── Per-target test functions (used by handlers; ignore enabled flag) ─────────
+
+func TestEmail() error {
+	cfg, err := Load()
+	if err != nil {
+		return err
 	}
 	hostname, _ := os.Hostname()
+	return sendEmail(cfg, "Test Alert", "Manual Test", "This is a test alert from the ZFS NAS management portal.", hostname)
+}
+
+func TestNtfy() error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	hostname, _ := os.Hostname()
+	return sendNtfy(cfg.Ntfy, "Test Alert", "Manual Test", "This is a test notification from the ZFS NAS management portal.", hostname)
+}
+
+func TestGotify() error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	hostname, _ := os.Hostname()
+	return sendGotify(cfg.Gotify, "Test Alert", "Manual Test", "This is a test notification from the ZFS NAS management portal.", hostname)
+}
+
+func TestPushover() error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	hostname, _ := os.Hostname()
+	return sendPushover(cfg.Pushover, "Test Alert", "Manual Test", "This is a test notification from the ZFS NAS management portal.", hostname)
+}
+
+func TestSyslog() error {
+	cfg, err := Load()
+	if err != nil {
+		return err
+	}
+	hostname, _ := os.Hostname()
+	return sendSyslogMsg(cfg.Syslog, "Test Alert", "Manual Test", "This is a test from the ZFS NAS management portal.", hostname)
+}
+
+func TestWebSocket() {
+	if wsHub == nil {
+		return
+	}
+	hostname, _ := os.Hostname()
+	wsHub.BroadcastJSON(map[string]string{
+		"subject":  "Test Alert",
+		"event":    "Manual Test",
+		"details":  "This is a test in-app notification from the ZFS NAS management portal.",
+		"hostname": hostname,
+		"time":     time.Now().Format("2006-01-02 15:04:05 MST"),
+	})
+}
+
+// ── Email sender ──────────────────────────────────────────────────────────────
+
+func sendEmail(cfg *AlertConfig, subject, event, details, hostname string) error {
+	if cfg.Email.SMTP.Host == "" || len(cfg.Email.To) == 0 {
+		return nil
+	}
 	body, err := renderEmail(emailData{
 		Event:    event,
 		Details:  details,
@@ -170,39 +458,39 @@ func Send(subject, event, details string) error {
 	if err != nil {
 		return err
 	}
-	return sendSMTP(cfg, subject, body)
+	return sendSMTP(&cfg.Email, subject, body)
 }
 
-func sendSMTP(cfg *AlertConfig, subject, htmlBody string) error {
-	addr := fmt.Sprintf("%s:%d", cfg.SMTP.Host, cfg.SMTP.Port)
-	msg := buildMIME(cfg.SMTP.From, cfg.To, subject, htmlBody)
+func sendSMTP(t *EmailTarget, subject, htmlBody string) error {
+	addr := fmt.Sprintf("%s:%d", t.SMTP.Host, t.SMTP.Port)
+	msg := buildMIME(t.SMTP.From, t.To, subject, htmlBody)
 
-	switch cfg.SMTP.AuthMode {
+	switch t.SMTP.AuthMode {
 	case "none":
-		return smtp.SendMail(addr, nil, cfg.SMTP.From, cfg.To, msg)
+		return smtp.SendMail(addr, nil, t.SMTP.From, t.To, msg)
 	case "plain", "starttls":
-		auth := smtp.PlainAuth("", cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.Host)
-		return smtp.SendMail(addr, auth, cfg.SMTP.From, cfg.To, msg)
+		auth := smtp.PlainAuth("", t.SMTP.Username, t.SMTP.Password, t.SMTP.Host)
+		return smtp.SendMail(addr, auth, t.SMTP.From, t.To, msg)
 	case "tls":
-		conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: cfg.SMTP.Host})
+		conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: t.SMTP.Host})
 		if err != nil {
 			return err
 		}
-		c, err := smtp.NewClient(conn, cfg.SMTP.Host)
+		c, err := smtp.NewClient(conn, t.SMTP.Host)
 		if err != nil {
 			return err
 		}
 		defer c.Quit() //nolint
-		if cfg.SMTP.Username != "" {
-			auth := smtp.PlainAuth("", cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.Host)
+		if t.SMTP.Username != "" {
+			auth := smtp.PlainAuth("", t.SMTP.Username, t.SMTP.Password, t.SMTP.Host)
 			if err := c.Auth(auth); err != nil {
 				return err
 			}
 		}
-		if err := c.Mail(cfg.SMTP.From); err != nil {
+		if err := c.Mail(t.SMTP.From); err != nil {
 			return err
 		}
-		for _, r := range cfg.To {
+		for _, r := range t.To {
 			if err := c.Rcpt(r); err != nil {
 				return err
 			}
@@ -216,7 +504,7 @@ func sendSMTP(cfg *AlertConfig, subject, htmlBody string) error {
 		}
 		return w.Close()
 	}
-	return fmt.Errorf("unknown auth_mode: %s", cfg.SMTP.AuthMode)
+	return fmt.Errorf("unknown auth_mode: %s", t.SMTP.AuthMode)
 }
 
 func buildMIME(from string, to []string, subject, htmlBody string) []byte {
@@ -232,6 +520,156 @@ func buildMIME(from string, to []string, subject, htmlBody string) []byte {
 	fmt.Fprintf(&buf, "%s", htmlBody)
 	return buf.Bytes()
 }
+
+// ── ntfy sender ───────────────────────────────────────────────────────────────
+
+func sendNtfy(t NtfyTarget, subject, event, details, hostname string) error {
+	if t.URL == "" {
+		return nil
+	}
+	body := fmt.Sprintf("Event: %s\nDetails: %s\nHost: %s\nTime: %s",
+		event, details, hostname, time.Now().Format("2006-01-02 15:04:05 MST"))
+	req, err := http.NewRequest(http.MethodPost, t.URL, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("X-Title", "[ZFS NAS] "+subject)
+	req.Header.Set("X-Tags", "warning")
+	if t.Priority != "" && t.Priority != "default" {
+		req.Header.Set("X-Priority", t.Priority)
+	}
+	if t.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+t.Token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("ntfy returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// ── Gotify sender ─────────────────────────────────────────────────────────────
+
+func sendGotify(t GotifyTarget, subject, event, details, hostname string) error {
+	if t.URL == "" || t.Token == "" {
+		return nil
+	}
+	prio := t.Priority
+	if prio == 0 {
+		prio = 5
+	}
+	msgBody := fmt.Sprintf("%s\n\nHost: %s\nTime: %s",
+		details, hostname, time.Now().Format("2006-01-02 15:04:05 MST"))
+	payload, _ := json.Marshal(map[string]interface{}{
+		"title":    "[ZFS NAS] " + subject,
+		"message":  msgBody,
+		"priority": prio,
+	})
+	endpoint := strings.TrimRight(t.URL, "/") + "/message?token=" + url.QueryEscape(t.Token)
+	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("gotify returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// ── Pushover sender ───────────────────────────────────────────────────────────
+
+func sendPushover(t PushoverTarget, subject, event, details, hostname string) error {
+	if t.UserKey == "" || t.APIToken == "" {
+		return nil
+	}
+	msgBody := fmt.Sprintf("%s\n\nHost: %s\nTime: %s",
+		details, hostname, time.Now().Format("2006-01-02 15:04:05 MST"))
+	vals := url.Values{
+		"token":    {t.APIToken},
+		"user":     {t.UserKey},
+		"title":    {"[ZFS NAS] " + subject},
+		"message":  {msgBody},
+		"priority": {fmt.Sprintf("%d", t.Priority)},
+	}
+	if t.Device != "" {
+		vals.Set("device", t.Device)
+	}
+	resp, err := http.PostForm("https://api.pushover.net/1/messages.json", vals)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("pushover returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// ── Syslog sender (raw RFC 3164, direct net.Dial) ─────────────────────────────
+
+// syslogPRI computes the RFC 3164 PRI value: (facility << 3) | severity.
+// Severity 4 = Warning.
+func syslogPRI(facility string) int {
+	fac := 3 // daemon
+	switch facility {
+	case "user":   fac = 1
+	case "local0": fac = 16
+	case "local1": fac = 17
+	case "local2": fac = 18
+	case "local3": fac = 19
+	case "local4": fac = 20
+	case "local5": fac = 21
+	case "local6": fac = 22
+	case "local7": fac = 23
+	}
+	return (fac * 8) + 4 // severity 4 = Warning
+}
+
+func sendSyslogMsg(t SyslogTarget, subject, event, details, hostname string) error {
+	if t.Host == "" {
+		return fmt.Errorf("syslog host is not configured")
+	}
+	port := t.Port
+	if port == 0 {
+		port = 514
+	}
+	proto := strings.ToLower(t.Protocol)
+	if proto == "" {
+		proto = "udp"
+	}
+	tag := t.Tag
+	if tag == "" {
+		tag = "zfsnas"
+	}
+	if hostname == "" {
+		hostname, _ = os.Hostname()
+	}
+
+	addr := fmt.Sprintf("%s:%d", t.Host, port)
+	conn, err := net.DialTimeout(proto, addr, 5*time.Second)
+	if err != nil {
+		return fmt.Errorf("syslog dial %s %s: %w", proto, addr, err)
+	}
+	defer conn.Close()
+
+	// RFC 3164: <PRI>TIMESTAMP HOSTNAME TAG[PID]: MSG
+	ts  := time.Now().Format("Jan _2 15:04:05")
+	msg := fmt.Sprintf("[ZFS NAS] %s | event=%s | details=%s", subject, event, details)
+	pkt := fmt.Sprintf("<%d>%s %s %s[%d]: %s\n",
+		syslogPRI(t.Facility), ts, hostname, tag, os.Getpid(), msg)
+
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_, err = conn.Write([]byte(pkt))
+	return err
+}
+
+// ── Email HTML template ───────────────────────────────────────────────────────
 
 type emailData struct {
 	Event    string

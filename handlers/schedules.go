@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"zfsnas/internal/alerts"
 	"zfsnas/internal/audit"
 	"zfsnas/internal/config"
 	"zfsnas/internal/scheduler"
@@ -254,6 +255,12 @@ func execScheduledSnapshot(p *scheduler.Policy) error {
 			Result:  audit.ResultError,
 			Details: fmt.Sprintf("scheduler %s: %v", p.ID, err),
 		})
+		go alerts.Send(
+			alerts.EventSnapshotFailure,
+			"Snapshot failed: "+p.Dataset,
+			"Scheduled Snapshot Failed",
+			fmt.Sprintf("Scheduled snapshot for dataset '%s' (policy %s) failed: %v", p.Dataset, p.ID, err),
+		)
 		return err
 	}
 	p.LastStatus  = "ok"
